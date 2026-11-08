@@ -181,18 +181,26 @@ OmniRoute `src/lib/a2a/taskExecution.ts::A2A_SKILL_HANDLERS` এ তারযু
 
 ## REST API (সহায়ক)
 
-JSON-RPC এন্ডপয়েন্ট `/a2a` হলো প্রামাণ্য A2A প্রবেশপথ। নিচের REST এন্ডপয়েন্টগুলো ড্যাশবোর্ড এবং বাহ্যিক টুলিংয়ের জন্য সহায়ক অ্যাক্সেস প্রদান করে:
+JSON-RPC এন্ডপয়েন্ট `/a2a` হল ক্যানোনিকাল A2A এন্ট্রি পয়েন্ট। নীচের REST শেষ পয়েন্টগুলি ড্যাশবোর্ড এবং বাহ্যিক টুলিংয়ের জন্য সহায়ক অ্যাক্সেস প্রদান করে:
 
-| এন্ডপয়েন্ট                  | মেথড | বিবরণ                                                      | প্রমাণীকরণ                                     |
-| :--------------------------- | :--- | :--------------------------------------------------------- | :--------------------------------------------- |
-| `/api/a2a/status`            | GET  | সার্ভারের অবস্থা, নিবন্ধিত স্কিল                           | (সর্বজনীন)                                     |
-| `/api/a2a/tasks`             | GET  | ফিল্টারসহ টাস্কের তালিকা                                   | ব্যবস্থাপনা                                    |
-| `/api/a2a/tasks/[id]`        | GET  | ID অনুযায়ী টাস্ক সংগ্রহ                                   | ব্যবস্থাপনা                                    |
-| `/api/a2a/tasks/[id]/cancel` | POST | চলমান টাস্ক বাতিল করা                                      | ব্যবস্থাপনা                                    |
-| `/.well-known/agent.json`    | GET  | Agent Card (A2A আবিষ্কার)                                  | (সর্বজনীন, 3600s ক্যাশ করা)                    |
-| `/api/a2a/tasks`             | POST | OmniConductor ফ্লিটে ইনবাউন্ড ডেলিগেশন (Conductor PRD RF5) | Bearer বনাম `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| শেষবিন্দু                    | পদ্ধতি | বর্ণনা                                                         | প্রমাণ                                                                                           |
+| :--------------------------- | :----- | :------------------------------------------------------------- | :----------------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET    | সার্ভারের অবস্থা, নিবন্ধিত দক্ষতা                              | (পাবলিক)                                                                                         |
+| `/api/a2a/tasks`             | GET    | ফিল্টার সহ কাজের তালিকা করুন                                   | ব্যবস্থাপনা বা API কী (নীচে দেখুন)                                                               |
+| `/api/a2a/tasks/[id]`        | GET    | ID দ্বারা কাজ পান                                              | ব্যবস্থাপনা বা API কী (নীচে দেখুন)                                                               |
+| `/api/a2a/tasks/[id]/cancel` | POST   | চলমান টাস্ক বাতিল করুন                                         | ব্যবস্থাপনা বা API কী (নীচে দেখুন)                                                               |
+| `/.well-known/agent.json`    | GET    | এজেন্ট কার্ড (A2A আবিষ্কার)                                    | (সর্বজনীন, ক্যাশে 3600s)                                                                         |
+| `/api/a2a/tasks`             | POST   | OmniConductor বহরে অন্তর্মুখী প্রতিনিধি দল (কন্ডাক্টর PRD RF5) | same as `GET`, প্লাস `OMNIROUTE_API_KEY` সেট করা থাকলে `REQUIRE_API_KEY` বন্ধ থাকে; `a2aEnabled` |
 
-**ইনবাউন্ড Conductor ডেলিগেশন (`POST /api/a2a/tasks`):** বাহ্যিক A2A এজেন্টগুলো OmniRoute-এর মাধ্যমে OmniConductor ফ্লিটে কোডিংয়ের কাজ অর্পণ করে। বডি: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — শুধু Conductor ফ্লিটের স্কিলগুলোই (Agent Card-এ ঘোষিত স্কিলগুলো) অর্পণযোগ্য; `metadata.conductor.repo.url` আবশ্যক (ফ্লিটটি git রিপোজিটরিতে কাজ করে)। রুটটি সার্ভার-সাইড `CONDUCTOR_ORCHESTRATOR_TOKEN` (ফলব্যাক `CONDUCTOR_HUB_TOKEN`) ব্যবহার করে হাবের `POST /v1/tasks`-এ অনুবাদ করে এবং `201 { conductor_task_id, state: "submitted" }` ফেরত দেয়; টাস্কের অবস্থাগুলো SSE→A2A মিরর (RF1)-এর মাধ্যমে ফিরে আসে এবং `GET /api/a2a/tasks?skill=conductor` ব্যবহার করে দেখা যায়।
+কে `/api/a2a/tasks*` রুটে যায় তা নির্ভর করে লগইন এবং API-কী সেটিংসের উপর:
+
+- `requireLogin=true` (ডিফল্ট): মিডলওয়্যার শুধুমাত্র ব্যবস্থাপনা শংসাপত্র (ড্যাশবোর্ড সেশন, `manage` -scope API কী, `oma_` অ্যাক্সেস টোকেন) এবং `OMNIROUTE_API_KEY` স্বীকার করে। একটি সাধারণ অনুমান কী `403` পায়। `Authorization` হেডারে মিডলওয়্যার শুধুমাত্র `OMNIROUTE_API_KEY` `Bearer <key>` হিসাবে নেয়; `Bearer` `401` পাওয়ার পর একটি বেয়ার কী বা একটি ট্যাব।
+- `requireLogin=false`, অথবা অনবোর্ডিং করার আগে লুপব্যাক উইন্ডো: `REQUIRE_API_KEY=true` সাথে যেকোনো বৈধ OmniRoute API কী বা ম্যানেজমেন্ট শংসাপত্র গ্রহণ করা হয় এবং বেনামী কলকারীরা `401` পায়; সঙ্গে `REQUIRE_API_KEY` বন্ধ রুট খোলা আছে.
+- `POST /api/a2a/tasks` অতিরিক্তভাবে `Authorization` হেডারে `OMNIROUTE_API_KEY` প্রয়োজন যখন সেই ভেরিয়েবল সেট করা থাকে এবং `REQUIRE_API_KEY` বন্ধ থাকে। অন্যান্য হেডার, যেমন `x-api-key`, সেখানে গণনা করা হয় না। লগইন অফ হলে বা অনবোর্ডিং করার আগে `Bearer` উপসর্গ সহ বা ছাড়াই কী পাস হয়; লগইন করার সাথে সাথে, শুধুমাত্র `Bearer <key>` মিডলওয়্যার অতিক্রম করে।
+
+যেখানে একটি প্রমাণপত্রের প্রয়োজন হয়, একটি `read` -scope `oma_` টোকেন শুধুমাত্র `GET` জন্য কাজ করে।
+
+**ইনবাউন্ড কন্ডাক্টর প্রতিনিধি দল (`POST /api/a2a/tasks`):** বহিরাগত A2A এজেন্টরা OmniRoute এর মাধ্যমে OmniConductor ফ্লীটে কোডিং কাজ অর্পণ করে। মূল অংশ: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — শুধুমাত্র কন্ডাক্টর ফ্লিট দক্ষতা (এজেন্ট কার্ডে ঘোষিত) হস্তান্তরযোগ্য; `metadata.conductor.repo.url` প্রয়োজন (বহরটি গিট রেপোতে কাজ করে)। রুটটি সার্ভার-সাইড `CONDUCTOR_ORCHESTRATOR_TOKEN` (fallback `CONDUCTOR_HUB_TOKEN`) ব্যবহার করে হাবের `POST /v1/tasks` এ অনুবাদ করে এবং `201 { conductor_task_id, state: "submitted" }` ফেরত দেয়; টাস্ক স্টেটগুলি SSE→A2A মিরর (RF1) এর মাধ্যমে প্রবাহিত হয় এবং `GET /api/a2a/tasks?skill=conductor` এর মাধ্যমে দৃশ্যমান হয়।
 
 ---
 

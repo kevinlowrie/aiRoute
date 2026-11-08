@@ -182,18 +182,26 @@ OmniRoute `src/lib/a2a/taskExecution.ts::A2A_SKILL_HANDLERS` တွင်ကြ�
 
 ## REST API (အရန်)
 
-JSON-RPC endpoint `/a2a` သည် ပင်မ A2A ဝင်ပေါက်ဖြစ်သည်။ အောက်ပါ REST endpoint များသည် dashboard များနှင့် ပြင်ပကိရိယာများအတွက် အရန်အသုံးပြုခွင့်ကို ပေးသည်-
+JSON-RPC အဆုံးမှတ် `/a2a` သည် canonical A2A entry point ဖြစ်သည်။ အောက်ပါ REST အဆုံးမှတ်များသည် ဒက်ရှ်ဘုတ်များနှင့် ပြင်ပကိရိယာများအတွက် အရန်ဝင်ရောက်ခွင့်ကို ပေးသည်-
 
-| Endpoint                     | Method | ဖော်ပြချက်                                                   | အထောက်အထားစိစစ်မှု                              |
-| :--------------------------- | :----- | :----------------------------------------------------------- | :---------------------------------------------- |
-| `/api/a2a/status`            | GET    | ဆာဗာအခြေအနေနှင့် မှတ်ပုံတင်ထားသော skill များ                 | (အများသုံး)                                     |
-| `/api/a2a/tasks`             | GET    | စစ်ထုတ်မှုများဖြင့် task များကို စာရင်းပြုစုရန်              | စီမံခန့်ခွဲမှု                                  |
-| `/api/a2a/tasks/[id]`        | GET    | ID ဖြင့် task ကို ရယူရန်                                     | စီမံခန့်ခွဲမှု                                  |
-| `/api/a2a/tasks/[id]/cancel` | POST   | လုပ်ဆောင်နေသော task ကို ပယ်ဖျက်ရန်                           | စီမံခန့်ခွဲမှု                                  |
-| `/.well-known/agent.json`    | GET    | Agent Card (A2A ရှာဖွေဖော်ထုတ်မှု)                           | (အများသုံး၊ 3600s ကြာ cache လုပ်ထားသည်)         |
-| `/api/a2a/tasks`             | POST   | OmniConductor fleet သို့ အဝင် delegation (Conductor PRD RF5) | Bearer နှင့် `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| အဆုံးမှတ်                    | နည်းလမ်း | ဖော်ပြချက်                                                                  | အထောက်အထား                                                                                                 |
+| :--------------------------- | :------- | :-------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET      | ဆာဗာအခြေအနေ၊ မှတ်ပုံတင်ထားသောကျွမ်းကျင်မှု                                  | (လူထု)                                                                                                     |
+| `/api/a2a/tasks`             | GET      | စစ်ထုတ်မှုများဖြင့် လုပ်ဆောင်စရာများကို စာရင်းပြုစုပါ။                      | စီမံခန့်ခွဲမှု သို့မဟုတ် API သော့ (အောက်တွင်ကြည့်ပါ)                                                       |
+| `/api/a2a/tasks/[id]`        | GET      | ID ဖြင့်လုပ်ဆောင်စရာကိုရယူပါ။                                               | စီမံခန့်ခွဲမှု သို့မဟုတ် API သော့ (အောက်တွင်ကြည့်ပါ)                                                       |
+| `/api/a2a/tasks/[id]/cancel` | POST     | လုပ်ဆောင်နေသည့် လုပ်ငန်းကို ပယ်ဖျက်ပါ။                                      | စီမံခန့်ခွဲမှု သို့မဟုတ် API သော့ (အောက်တွင်ကြည့်ပါ)                                                       |
+| `/.well-known/agent.json`    | GET      | အေးဂျင့်ကတ် (A2A ရှာဖွေတွေ့ရှိမှု)                                          | (အများပြည်သူ၊ သိမ်းဆည်းထားသော 3600s)                                                                       |
+| `/api/a2a/tasks`             | POST     | OmniConductor ရေယာဉ်စုသို့ ရောက်ရှိလာသော ကိုယ်စားလှယ်အဖွဲ့ (စပယ်ယာ PRD RF5) | `REQUIRE_API_KEY` ပိတ်ထားချိန်တွင် သတ်မှတ်ပါက `GET` နှင့် `OMNIROUTE_API_KEY` နှင့် အတူတူပင်။ `a2aEnabled` |
 
-**အဝင် Conductor delegation (`POST /api/a2a/tasks`):** ပြင်ပ A2A agent များသည် OmniRoute မှတစ်ဆင့် coding အလုပ်များကို OmniConductor fleet သို့ လွှဲအပ်သည်။ Body: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — Conductor fleet skill များ (Agent Card တွင် ကြေညာထားသည့် skill များ) ကိုသာ လွှဲအပ်နိုင်သည်။ `metadata.conductor.repo.url` ကို မဖြစ်မနေ ထည့်သွင်းရမည် (fleet သည် git repo များပေါ်တွင် အလုပ်လုပ်သည်)။ Route သည် ဆာဗာဘက်ရှိ `CONDUCTOR_ORCHESTRATOR_TOKEN` (`CONDUCTOR_HUB_TOKEN` ကို အရန်အဖြစ် အသုံးပြုသည်) ကို အသုံးပြု၍ hub ၏ `POST /v1/tasks` သို့ ပြောင်းလဲပေးပြီး `201 { conductor_task_id, state: "submitted" }` ကို ပြန်ပေးသည်။ task အခြေအနေများသည် SSE→A2A mirror (RF1) မှတစ်ဆင့် ပြန်လည်စီးဆင်းလာပြီး `GET /api/a2a/tasks?skill=conductor` မှတစ်ဆင့် ကြည့်ရှုနိုင်သည်။
+`/api/a2a/tasks*` လမ်းကြောင်းများသို့ ဖြတ်ကျော်သွားသူများသည် အကောင့်ဝင်ခြင်းနှင့် API သော့ဆက်တင်များပေါ်တွင် မူတည်သည်-
+
+- `requireLogin=true` (မူလ)- အလယ်တန်းဆော့ဖ်ဝဲသည် စီမံခန့်ခွဲမှုဆိုင်ရာ အထောက်အထားများ (ဒက်ရှ်ဘုတ်စက်ရှင်၊ `manage` -scope API ကီး၊ `oma_` ဝင်ရောက်ခွင့် တိုကင်) နှင့် `OMNIROUTE_API_KEY` သာ ဝန်ခံပါသည်။ ရိုးရိုးအနုမာနသော့သည် `403` ရရှိသည်။ `Authorization` header တွင် Middleware သည် `OMNIROUTE_API_KEY` `Bearer <key>` အဖြစ်သာ ယူသည်။ `Bearer` `401` ရရှိပြီးနောက် ကီးဘားတစ်ခု သို့မဟုတ် တက်ဘ်တစ်ခု။
+- `requireLogin=false`၊ သို့မဟုတ် မစတင်မီ လှည့်ပတ်ဝင်းဒိုး- `REQUIRE_API_KEY=true` ဖြင့် တရားဝင် OmniRoute API သော့ သို့မဟုတ် စီမံခန့်ခွဲမှုဆိုင်ရာ အထောက်အထားကို လက်ခံပြီး အမည်မသိ ခေါ်ဆိုသူများသည် `401` ရရှိသည်။ `REQUIRE_API_KEY` ဖြင့် လမ်းကြောင်းများကို ဖွင့်ထားသည်။
+- `POST /api/a2a/tasks` အဆိုပါ variable ကိုသတ်မှတ်ပြီး `REQUIRE_API_KEY` ကိုပိတ်ထားသည့်အခါ `Authorization` ခေါင်းစီးတွင် `OMNIROUTE_API_KEY` လိုအပ်သည်။ `x-api-key` ကဲ့သို့သော အခြားသော ခေါင်းစီးများကို ထိုနေရာတွင် ထည့်မတွက်ပါ။ လော့ဂ်အင်ပိတ်ခြင်း သို့မဟုတ် စတင်ခြင်းမပြုမီတွင် သော့သည် `Bearer` ရှေ့စာတွဲဖြင့် သို့မဟုတ် မပါဘဲ ဖြတ်သန်းသွားမည်ဖြစ်သည်။ အကောင့်ဖွင့်ခြင်းဖြင့် `Bearer <key>` သာလျှင် အလယ်တန်းဆော့ဖ်ဝဲကို ကျော်သွားပါသည်။
+
+အထောက်အထားတစ်ခု လိုအပ်ပါက `read` -scope `oma_` တိုကင်သည် `GET` အတွက်သာ အလုပ်လုပ်ပါသည်။
+
+**Inbound Conductor ကိုယ်စားလှယ်အဖွဲ့ (`POST /api/a2a/tasks`):** ပြင်ပ A2A အေးဂျင့်များသည် OmniRoute မှတဆင့် OmniConductor ရေတပ်သို့ ကုဒ်ရေးခြင်းကို လွှဲအပ်သည်။ ကိုယ်ထည်- `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — only Conductor fleet ကျွမ်းကျင်မှုများ (အေးဂျင့်ကတ်တွင် ကြေငြာထားသည့်အရာများ) ကို တာဝန်လွှဲအပ်ပါသည်၊ `metadata.conductor.repo.url` လိုအပ်သည် (ရေယာဉ်သည် git repos တွင်အလုပ်လုပ်သည်)။ လမ်းကြောင်းသည် server-side `CONDUCTOR_ORCHESTRATOR_TOKEN` (fallback `CONDUCTOR_HUB_TOKEN`) ကို အသုံးပြု၍ hub ၏ `POST /v1/tasks` သို့ ဘာသာပြန်ပြီး `201 { conductor_task_id, state: "submitted" }` ပြန်ပေးသည်။ Task State များသည် SSE→A2A mirror (RF1) မှတဆင့် ပြန်စီးဆင်းပြီး `GET /api/a2a/tasks?skill=conductor` မှတဆင့် မြင်နိုင်သည်။
 
 ---
 

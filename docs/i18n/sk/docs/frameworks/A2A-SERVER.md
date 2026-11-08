@@ -180,20 +180,28 @@ Každý riadok obsahuje stĺpec `rawUrl`, takže agenti môžu okamžite získa�
 
 ---
 
-## REST API (pomocné)
+## REST API (pomocný)
 
-Koncový bod JSON-RPC `/a2a` je štandardným vstupným bodom A2A. Nižšie uvedené koncové body REST poskytujú pomocný prístup pre informačné panely a externé nástroje:
+Koncový bod JSON-RPC `/a2a` je kanonický vstupný bod A2A. Nižšie uvedené koncové body REST poskytujú pomocný prístup k ovládacím panelom a externým nástrojom:
 
-| Koncový bod                  | Metóda | Popis                                                                  | Autorizácia                                      |
-| :--------------------------- | :----- | :--------------------------------------------------------------------- | :----------------------------------------------- |
-| `/api/a2a/status`            | GET    | Stav servera, registrované zručnosti                                   | (verejné)                                        |
-| `/api/a2a/tasks`             | GET    | Zoznam úloh s filtrami                                                 | správa                                           |
-| `/api/a2a/tasks/[id]`        | GET    | Získanie úlohy podľa ID                                                | správa                                           |
-| `/api/a2a/tasks/[id]/cancel` | POST   | Zrušenie spustenej úlohy                                               | správa                                           |
-| `/.well-known/agent.json`    | GET    | Karta agenta (vyhľadávanie A2A)                                        | (verejné, uložené vo vyrovnávacej pamäti 3600 s) |
-| `/api/a2a/tasks`             | POST   | Prichádzajúce delegovanie do flotily OmniConductor (Conductor PRD RF5) | Bearer voči `OMNIROUTE_API_KEY` + `a2aEnabled`   |
+| Koncový bod                  | Metóda | Popis                                                            | Auth                                                                                                        |
+| :--------------------------- | :----- | :--------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET    | Stav servera, registrované zručnosti                             | (verejné)                                                                                                   |
+| `/api/a2a/tasks`             | GET    | Zoznam úloh s filtrami                                           | manažment alebo kľúč API (pozri nižšie)                                                                     |
+| `/api/a2a/tasks/[id]`        | GET    | Získajte úlohu podľa ID                                          | manažment alebo kľúč API (pozri nižšie)                                                                     |
+| `/api/a2a/tasks/[id]/cancel` | POST   | Zrušiť spustenú úlohu                                            | manažment alebo kľúč API (pozri nižšie)                                                                     |
+| `/.well-known/agent.json`    | GET    | Karta agenta (objavenie A2A )                                    | (verejné, vo vyrovnávacej pamäti 3600s)                                                                     |
+| `/api/a2a/tasks`             | POST   | Prichádzajúca delegácia do flotily OmniConductor (vodič PRD RF5) | rovnaké ako `GET`, plus `OMNIROUTE_API_KEY` ak je nastavené, keď je `REQUIRE_API_KEY` vypnuté; `a2aEnabled` |
 
-**Prichádzajúce delegovanie Conductor (`POST /api/a2a/tasks`):** externí agenti A2A delegujú programátorské úlohy flotile OmniConductor prostredníctvom OmniRoute. Telo: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — delegovať možno iba zručnosti flotily Conductor (tie, ktoré sú uvedené na karte agenta); `metadata.conductor.repo.url` je povinné (flotila pracuje s repozitármi git). Trasa vykoná prevod na `POST /v1/tasks` centra pomocou tokenu `CONDUCTOR_ORCHESTRATOR_TOKEN` na strane servera (s náhradným použitím `CONDUCTOR_HUB_TOKEN`) a vráti `201 { conductor_task_id, state: "submitted" }`; stavy úloh sa prenášajú späť prostredníctvom zrkadlenia SSE→A2A (RF1) a sú viditeľné cez `GET /api/a2a/tasks?skill=conductor`.
+Kto sa dostane k trasám `/api/a2a/tasks*` závisí od prihlásenia a nastavení kľúča API:
+
+- `requireLogin=true` (predvolené): middleware pripúšťa iba poverenia na správu (reláciu dashboardu, kľúč `manage` -scope API, prístupový token `oma_` ) a `OMNIROUTE_API_KEY`. Jednoduchý inferenčný kľúč dostane `403`. V hlavičke `Authorization` middleware berie iba `OMNIROUTE_API_KEY` ako `Bearer <key>`; holý kľúč alebo tabulátor po `Bearer` získa `401`.
+- `requireLogin=false` alebo okno spätnej slučky pred prihlásením: so `REQUIRE_API_KEY=true` sa akceptuje akýkoľvek platný kľúč OmniRoute API alebo poverenie správy a anonymní volajúci dostanú `401`; so `REQUIRE_API_KEY` mimo cesty sú otvorené.
+- `POST /api/a2a/tasks` navyše vyžaduje `OMNIROUTE_API_KEY` v hlavičke `Authorization` keď je táto premenná nastavená a `REQUIRE_API_KEY` je vypnuté. Ostatné hlavičky, ako napríklad `x-api-key`, sa tam nepočítajú. Pri odhlásení alebo pred zaradením kľúč prechádza s predponou `Bearer` alebo bez nej; so zapnutým prihlásením sa cez middleware dostane iba `Bearer <key>`.
+
+Ak sa vyžaduje poverenie, token `read` -scope `oma_` funguje iba pre `GET`.
+
+**Delegovanie prichádzajúceho dirigenta (`POST /api/a2a/tasks`):** externí agenti A2A delegujú prácu kódovania na flotilu OmniConductor prostredníctvom OmniRoute. Telo: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — len zručnosti flotily vodiča (tie uvedené na karte agenta) sú delegovateľné; Vyžaduje sa `metadata.conductor.repo.url` (flotila funguje na git repo). Trasa sa preloží do `POST /v1/tasks` rozbočovača pomocou `CONDUCTOR_ORCHESTRATOR_TOKEN` na strane servera (záložné `CONDUCTOR_HUB_TOKEN`) a vráti `201 { conductor_task_id, state: "submitted" }`; stavy úloh prúdia späť cez zrkadlo SSE→A2A (RF1) a sú viditeľné cez `GET /api/a2a/tasks?skill=conductor`.
 
 ---
 

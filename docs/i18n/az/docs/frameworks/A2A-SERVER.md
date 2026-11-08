@@ -175,18 +175,26 @@ Hər bir sıra `rawUrl` sütununu ehtiva edir ki, agentlər dərhal tam SKILL.md
 
 ## REST API (köməkçi)
 
-JSON-RPC son nöqtəsi `/a2a` əsas A2A giriş nöqtəsidir. Aşağıdakı REST son nöqtələri idarəetmə panelləri və xarici alətlər üçün köməkçi giriş təmin edir:
+JSON-RPC son nöqtəsi `/a2a` kanonik A2A giriş nöqtəsidir. Aşağıdakı REST son nöqtələri tablosuna və xarici alətlərə köməkçi girişi təmin edir:
 
-| Son nöqtə                    | Metod | Təsvir                                                              | Autentifikasiya                              |
-| :--------------------------- | :---- | :------------------------------------------------------------------ | :------------------------------------------- |
-| `/api/a2a/status`            | GET   | Serverin statusu, qeydiyyatdan keçmiş bacarıqlar                    | (ictimai)                                    |
-| `/api/a2a/tasks`             | GET   | Tapşırıqları filtrlərlə siyahıla                                    | idarəetmə                                    |
-| `/api/a2a/tasks/[id]`        | GET   | Tapşırığı ID üzrə əldə et                                           | idarəetmə                                    |
-| `/api/a2a/tasks/[id]/cancel` | POST  | İcra olunan tapşırığı ləğv et                                       | idarəetmə                                    |
-| `/.well-known/agent.json`    | GET   | Agent Kartı (A2A aşkarlanması)                                      | (ictimai, 3600s keşlənir)                    |
-| `/api/a2a/tasks`             | POST  | OmniConductor donanmasına daxil olan delegasiya (Conductor PRD RF5) | Bearer və `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| Son nöqtə                    | Metod | Təsvir                                                             | Auth                                                                                                      |
+| :--------------------------- | :---- | :----------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET   | Server statusu, qeydiyyatdan keçmiş bacarıqlar                     | (ictimai)                                                                                                 |
+| `/api/a2a/tasks`             | GET   | Filtrlərlə tapşırıqları siyahıya salın                             | idarəetmə və ya API açarı (aşağıya bax)                                                                   |
+| `/api/a2a/tasks/[id]`        | GET   | ID ilə tapşırıq alın                                               | idarəetmə və ya API açarı (aşağıya bax)                                                                   |
+| `/api/a2a/tasks/[id]/cancel` | POST  | Çalışan tapşırığı ləğv edin                                        | idarəetmə və ya API açarı (aşağıya bax)                                                                   |
+| `/.well-known/agent.json`    | GET   | Agent Kartı (A2A kəşfi)                                            | (ictimai, keşlənmiş 3600s)                                                                                |
+| `/api/a2a/tasks`             | POST  | OmniConductor donanmasına gələn nümayəndə heyəti (Dirijor PRD RF5) | `GET` ilə eyni, üstəgəl `REQUIRE_API_KEY` söndürüldükdə təyin olunarsa `OMNIROUTE_API_KEY` ; `a2aEnabled` |
 
-**Daxil olan Conductor delegasiyası (`POST /api/a2a/tasks`):** xarici A2A agentləri kodlaşdırma işlərini OmniRoute vasitəsilə OmniConductor donanmasına həvalə edir. Gövdə: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — yalnız Conductor donanmasının bacarıqları (Agent Kartında elan edilənlər) həvalə edilə bilər; `metadata.conductor.repo.url` tələb olunur (donanma git repozitoriyalarında işləyir). Marşrut server tərəfindəki `CONDUCTOR_ORCHESTRATOR_TOKEN`-dan (ehtiyat variant kimi `CONDUCTOR_HUB_TOKEN`) istifadə edərək mərkəzin `POST /v1/tasks` sorğusuna çevrilir və `201 { conductor_task_id, state: "submitted" }` qaytarır; tapşırıq vəziyyətləri SSE→A2A güzgüsü (RF1) vasitəsilə geri ötürülür və `GET /api/a2a/tasks?skill=conductor` vasitəsilə görünür.
+`/api/a2a/tasks*` marşrutlarına kimin keçəcəyi giriş və API açarı parametrlərindən asılıdır:
+
+- `requireLogin=true` (defolt): ara proqram yalnız idarəetmə etimadnaməsini qəbul edir (iş paneli sessiyası, `manage` -scope API açarı, `oma_` giriş nişanı) və `OMNIROUTE_API_KEY`. Sadə bir nəticə çıxarma açarı `403` alır. `Authorization` başlığında ara proqram yalnız `OMNIROUTE_API_KEY` `Bearer <key>` kimi qəbul edir; `Bearer` `401` aldıqdan sonra çılpaq açar və ya tab.
+- `requireLogin=false`, və ya işə başlamazdan əvvəl geri dönmə pəncərəsi: `REQUIRE_API_KEY=true` ilə hər hansı etibarlı OmniRoute API açarı və ya idarəetmə etimadnaməsi qəbul edilir və anonim zəng edənlər `401` əldə edir; `REQUIRE_API_KEY` off ilə marşrutlar açıqdır.
+- `POST /api/a2a/tasks` əlavə olaraq həmin dəyişən təyin edildikdə və `REQUIRE_API_KEY` söndürüldükdə `Authorization` başlığında `OMNIROUTE_API_KEY` tələb edir. `x-api-key` kimi digər başlıqlar orada sayılmır. Giriş söndürüldükdə və ya işə başlamazdan əvvəl açar `Bearer` prefiksi ilə və ya olmadan keçir; giriş ilə yalnız `Bearer <key>` ara proqramdan keçir.
+
+Etibarnamə tələb olunduqda, `read` -scope `oma_` nişanı yalnız `GET` üçün işləyir.
+
+**Gələn Dirijor nümayəndə heyəti (`POST /api/a2a/tasks`):** xarici A2A agentləri kodlaşdırma işini OmniRoute vasitəsilə OmniConductor donanmasına həvalə edir. Bədən: yalnız `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — Dirijor donanmasının bacarıqları (Agent Kartında elan edilənlər) səlahiyyət verilir; `metadata.conductor.repo.url` tələb olunur (donanma git reposlarında işləyir). Marşrut server tərəfindəki `CONDUCTOR_ORCHESTRATOR_TOKEN` (geri dönüş `CONDUCTOR_HUB_TOKEN`) istifadə edərək mərkəzin `POST /v1/tasks` -a çevrilir və `201 { conductor_task_id, state: "submitted" }` qaytarır; tapşırıq dövlətləri SSE→A2A güzgü (RF1) vasitəsilə geri axır və `GET /api/a2a/tasks?skill=conductor` vasitəsilə görünür .
 
 ---
 

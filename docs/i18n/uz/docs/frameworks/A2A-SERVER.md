@@ -181,18 +181,26 @@ Har bir qator `rawUrl` ustunini o'z ichiga oladi, shuning uchun agentlar darhol 
 
 ## REST API (yordamchi)
 
-JSON-RPC endpointi `/a2a` kanonik A2A kirish nuqtasidir. Quyidagi REST endpointlari boshqaruv panellari va tashqi vositalar uchun yordamchi kirishni taqdim etadi:
+JSON-RPC oxirgi nuqtasi `/a2a` kanonik A2A kirish nuqtasidir. Quyidagi REST so'nggi nuqtalari asboblar paneli va tashqi asboblar uchun yordamchi kirishni ta'minlaydi:
 
-| Endpoint                     | Metod | Tavsif                                                         | Autentifikatsiya                             |
-| :--------------------------- | :---- | :------------------------------------------------------------- | :------------------------------------------- |
-| `/api/a2a/status`            | GET   | Server holati, roʻyxatdan oʻtgan ko‘nikmalar                   | (ommaviy)                                    |
-| `/api/a2a/tasks`             | GET   | Vazifalarni filtrlar bilan roʻyxatlash                         | boshqaruv                                    |
-| `/api/a2a/tasks/[id]`        | GET   | Vazifani ID boʻyicha olish                                     | boshqaruv                                    |
-| `/api/a2a/tasks/[id]/cancel` | POST  | Bajarilayotgan vazifani bekor qilish                           | boshqaruv                                    |
-| `/.well-known/agent.json`    | GET   | Agent kartasi (A2A aniqlash)                                   | (ommaviy, 3600s keshlanadi)                  |
-| `/api/a2a/tasks`             | POST  | OmniConductor parkiga kiruvchi delegatsiya (Conductor PRD RF5) | Bearer va `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| Yakuniy nuqta                | Usul | Tavsif                                                        | Avtor                                                                                                         |
+| :--------------------------- | :--- | :------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------ |
+| `/api/a2a/status`            | GET  | Server holati, ro'yxatdan o'tgan ko'nikmalar                  | (ommaviy)                                                                                                     |
+| `/api/a2a/tasks`             | GET  | Filtrlar bilan vazifalar ro'yxati                             | boshqaruv yoki API kaliti (pastga qarang)                                                                     |
+| `/api/a2a/tasks/[id]`        | GET  | Topshiriqni ID orqali oling                                   | boshqaruv yoki API kaliti (pastga qarang)                                                                     |
+| `/api/a2a/tasks/[id]/cancel` | POST | Ishlayotgan vazifani bekor qilish                             | boshqaruv yoki API kaliti (pastga qarang)                                                                     |
+| `/.well-known/agent.json`    | GET  | Agent kartasi (A2A kashfiyoti)                                | (ommaviy, keshlangan 3600s)                                                                                   |
+| `/api/a2a/tasks`             | POST | OmniConductor flotiga kiruvchi delegatsiya (dirijyor PRD RF5) | `GET` bilan bir xil, agar `REQUIRE_API_KEY` o'chirilgan bo'lsa, qo'shimcha `OMNIROUTE_API_KEY` ; `a2aEnabled` |
 
-**Kiruvchi Conductor delegatsiyasi (`POST /api/a2a/tasks`):** tashqi A2A agentlari kodlash ishlarini OmniRoute orqali OmniConductor parkiga delegatsiya qiladi. Soʻrov tanasi: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — faqat Conductor parki ko‘nikmalarini (Agent kartasida eʼlon qilinganlarini) delegatsiya qilish mumkin; `metadata.conductor.repo.url` talab qilinadi (park git repozitoriylari ustida ishlaydi). Marshrut server tomonidagi `CONDUCTOR_ORCHESTRATOR_TOKEN` (zaxira sifatida `CONDUCTOR_HUB_TOKEN`) yordamida hubning `POST /v1/tasks` soʻroviga aylantiriladi va `201 { conductor_task_id, state: "submitted" }` qaytaradi; vazifa holatlari SSE→A2A ko‘zgusi (RF1) orqali qaytib keladi va ularni `GET /api/a2a/tasks?skill=conductor` orqali koʻrish mumkin.
+`/api/a2a/tasks*` marshrutlariga kim kirishi login va API-kalit sozlamalariga bog'liq:
+
+- `requireLogin=true` (standart): o'rta dastur faqat boshqaruv hisob ma'lumotlarini (boshqaruv paneli sessiyasi, `manage` -scope API kaliti, `oma_` kirish tokeni) va `OMNIROUTE_API_KEY` qabul qiladi. Oddiy xulosa kaliti `403` oladi. `Authorization` sarlavhasida o'rta dastur faqat `OMNIROUTE_API_KEY` `Bearer <key>` sifatida qabul qiladi; yalang'och kalit yoki `Bearer` `401` olgandan keyin tab.
+- `requireLogin=false`, yoki ishga tushirishdan oldin orqaga qaytish oynasi: `REQUIRE_API_KEY=true` bilan har qanday joriy OmniRoute API kaliti yoki boshqaruv hisob ma’lumotlari qabul qilinadi va anonim qo‘ng‘iroq qiluvchilar `401` ega bo‘ladilar; `REQUIRE_API_KEY` o'chirilgan holda marshrutlar ochiq.
+- `POST /api/a2a/tasks` qo'shimcha ravishda bu o'zgaruvchi o'rnatilgan va `REQUIRE_API_KEY` o'chirilgan bo'lsa, `Authorization` sarlavhasida `OMNIROUTE_API_KEY` talab qiladi. Boshqa sarlavhalar, masalan `x-api-key`, u erda hisobga olinmaydi. Tizimga kirish oʻchirilganda yoki kirishdan oldin kalit `Bearer` prefiksi bilan yoki boʻlmasdan oʻtadi; login bilan faqat `Bearer <key>` o'rta dasturdan o'tadi.
+
+Hisob ma'lumotlari kerak bo'lganda, `read` -scope `oma_` tokeni faqat `GET` uchun ishlaydi.
+
+**Kiruvchi konduktor delegatsiyasi (`POST /api/a2a/tasks`):** tashqi A2A agentlari kodlash ishlarini OmniRoute orqali OmniConductor flotiga topshiradi. Tana: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — faqat Supero'tkazuvchilar parki ko'nikmalari (Agent kartasida e'lon qilinganlar) vakolatga ega; `metadata.conductor.repo.url` talab qilinadi (flot git reposlarida ishlaydi). Marshrut server tomonidagi `CONDUCTOR_ORCHESTRATOR_TOKEN` (qayta `CONDUCTOR_HUB_TOKEN`) yordamida markazning `POST /v1/tasks` ga tarjima qilinadi va `201 { conductor_task_id, state: "submitted" }` qaytaradi; vazifa holatlari SSE→A2A oynasi (RF1) orqali orqaga oqadi va `GET /api/a2a/tasks?skill=conductor` orqali ko'rinadi.
 
 ---
 

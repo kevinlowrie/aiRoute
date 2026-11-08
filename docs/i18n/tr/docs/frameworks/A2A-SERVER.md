@@ -184,18 +184,26 @@ Her satır `rawUrl` sütununu içerir, böylece aracılar SKILL.md tamamını an
 
 ## REST API (yardımcı)
 
-JSON-RPC uç noktası `/a2a`, standart A2A giriş noktasıdır. Aşağıdaki REST uç noktaları, panolar ve harici araçlar için yardımcı erişim sağlar:
+JSON-RPC uç noktası `/a2a` kurallı A2A giriş noktasıdır. Aşağıdaki REST uç noktaları, kontrol panelleri ve harici araçlar için yardımcı erişim sağlar:
 
-| Uç Nokta                     | Yöntem | Açıklama                                                    | Kimlik Doğrulama                              |
-| :--------------------------- | :----- | :---------------------------------------------------------- | :-------------------------------------------- |
-| `/api/a2a/status`            | GET    | Sunucu durumu, kayıtlı yetenekler                           | (herkese açık)                                |
-| `/api/a2a/tasks`             | GET    | Görevleri filtrelerle listeleme                             | yönetim                                       |
-| `/api/a2a/tasks/[id]`        | GET    | Görevi kimliğe göre alma                                    | yönetim                                       |
-| `/api/a2a/tasks/[id]/cancel` | POST   | Çalışan görevi iptal etme                                   | yönetim                                       |
-| `/.well-known/agent.json`    | GET    | Agent Card (A2A keşfi)                                      | (herkese açık, 3600 sn önbelleğe alınır)      |
-| `/api/a2a/tasks`             | POST   | OmniConductor filosuna gelen delegasyon (Conductor PRD RF5) | Bearer ile `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| Uç nokta                     | Yöntem | Tanım                                                     | Yetki                                                                                              |
+| :--------------------------- | :----- | :-------------------------------------------------------- | :------------------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET    | Sunucu durumu, kayıtlı beceriler                          | (halk)                                                                                             |
+| `/api/a2a/tasks`             | GET    | Görevleri filtrelerle listeleme                           | yönetim veya API anahtarı (aşağıya bakın)                                                          |
+| `/api/a2a/tasks/[id]`        | GET    | ID tarafından görev alın                                  | yönetim veya API anahtarı (aşağıya bakın)                                                          |
+| `/api/a2a/tasks/[id]/cancel` | POST   | Çalışan görevi iptal et                                   | yönetim veya API anahtarı (aşağıya bakın)                                                          |
+| `/.well-known/agent.json`    | GET    | Temsilci Kartı (A2A keşfi)                                | (genel, önbelleğe alınmış 3600'ler)                                                                |
+| `/api/a2a/tasks`             | POST   | OmniConductor filosuna gelen delegasyon (İletken PRD RF5) | `GET` ile aynı, ayrıca `REQUIRE_API_KEY` kapalıyken ayarlanırsa `OMNIROUTE_API_KEY` ; `a2aEnabled` |
 
-**Gelen Conductor delegasyonu (`POST /api/a2a/tasks`):** Harici A2A ajanları, kodlama işlerini OmniRoute üzerinden OmniConductor filosuna devreder. Gövde: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — yalnızca Conductor filosu yetenekleri (Agent Card üzerinde duyurulanlar) devredilebilir; `metadata.conductor.repo.url` zorunludur (filo, git depoları üzerinde çalışır). Rota, sunucu tarafındaki `CONDUCTOR_ORCHESTRATOR_TOKEN` (yedek olarak `CONDUCTOR_HUB_TOKEN`) kullanılarak hub'ın `POST /v1/tasks` çağrısına dönüştürülür ve `201 { conductor_task_id, state: "submitted" }` döndürür; görev durumları SSE→A2A yansıtıcısı (RF1) üzerinden geri aktarılır ve `GET /api/a2a/tasks?skill=conductor` aracılığıyla görüntülenebilir.
+`/api/a2a/tasks*` rotalarına kimin ulaşacağı, oturum açma ve API anahtarı ayarlarına bağlıdır:
+
+- `requireLogin=true` (varsayılan): ara yazılım yalnızca yönetim kimlik bilgilerini (kontrol paneli oturumu, `manage` -scope API anahtarı, `oma_` erişim belirteci) ve `OMNIROUTE_API_KEY` kabul eder. Düz bir çıkarım anahtarı `403` değerini alır. `Authorization` başlığında ara katman yazılımı yalnızca `OMNIROUTE_API_KEY` `Bearer <key>` olarak alır; `Bearer` `401` aldıktan sonra çıplak bir anahtar veya sekme.
+- `requireLogin=false` veya katılımdan önceki geridöngü penceresi: `REQUIRE_API_KEY=true` ile herhangi bir geçerli OmniRoute API anahtarı veya yönetim kimlik bilgisi kabul edilir ve anonim arayanlar `401` alır; `REQUIRE_API_KEY` kapalıyken rotalar açıktır.
+- `POST /api/a2a/tasks` additionally requires `OMNIROUTE_API_KEY` in the `Authorization` header when that variable is set and `REQUIRE_API_KEY` is off. Other headers, such as `x-api-key`, do not count there. With login off or before onboarding the key passes with or without a `Bearer` prefix; with login on, only `Bearer <key>` gets past the middleware.
+
+Kimlik bilgisinin gerekli olduğu durumlarda `read` -scope `oma_` belirteci yalnızca `GET` için çalışır.
+
+**Gelen İletken heyeti (`POST /api/a2a/tasks`):** harici A2A aracıları kodlama işini OmniRoute aracılığıyla OmniConductor filosuna devreder. Gövde: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — yalnızca İletken filosu becerileri (Acente Kartında açıklananlar) devredilebilir; `metadata.conductor.repo.url` gereklidir (filo git repoları üzerinde çalışır). Rota, sunucu tarafı `CONDUCTOR_ORCHESTRATOR_TOKEN` (geri dönüş `CONDUCTOR_HUB_TOKEN`) kullanarak hub'ın `POST /v1/tasks` çevirir ve `201 { conductor_task_id, state: "submitted" }` değerini döndürür; görev durumları SSE→A2A aynası (RF1) üzerinden geriye doğru akar ve `GET /api/a2a/tasks?skill=conductor` aracılığıyla görülebilir.
 
 ---
 

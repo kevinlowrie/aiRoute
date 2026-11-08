@@ -184,18 +184,26 @@ Svaki red uključuje `rawUrl` kolonu tako da agenti mogu odmah dohvatiti puni SK
 
 ## REST API (pomoćni)
 
-JSON-RPC endpoint `/a2a` je kanonični A2A ulazni punkt. Ispod navedeni REST endpointi pružaju pomoćni pristup za kontrolne ploče (dashboards) i vanjske alate:
+JSON-RPC krajnja `/a2a` je kanonska A2A ulazna tačka. REST krajnje tačke u nastavku pružaju pomoćni pristup nadzornim pločama i vanjskim alatima:
 
-| Endpoint                     | Metoda | Opis                                                       | Auth                                         |
-| :--------------------------- | :----- | :--------------------------------------------------------- | :------------------------------------------- |
-| `/api/a2a/status`            | GET    | Status servera, registrovane vještine (skills)             | (javno)                                      |
-| `/api/a2a/tasks`             | GET    | Lista zadataka sa filterima                                | management                                   |
-| `/api/a2a/tasks/[id]`        | GET    | Dohvati zadatak prema ID-u                                 | management                                   |
-| `/api/a2a/tasks/[id]/cancel` | POST   | Otkaži pokrenuti zadatak                                   | management                                   |
-| `/.well-known/agent.json`    | GET    | Agent Card (A2A otkrivanje)                                | (javno, keširano 3600s)                      |
-| `/api/a2a/tasks`             | POST   | Inbound delegacija OmniConductor floti (Conductor PRD RF5) | Bearer vs `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| Krajnja tačka                | Metoda | Opis                                                        | Auth                                                                                                         |
+| :--------------------------- | :----- | :---------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET    | Status servera, registrovane vještine                       | (javno)                                                                                                      |
+| `/api/a2a/tasks`             | GET    | Navedite zadatke sa filterima                               | upravljanje ili API ključ (vidi dolje)                                                                       |
+| `/api/a2a/tasks/[id]`        | GET    | Dobijte zadatak od ID                                       | upravljanje ili API ključ (vidi dolje)                                                                       |
+| `/api/a2a/tasks/[id]/cancel` | POST   | Otkažite pokrenuti zadatak                                  | upravljanje ili API ključ (vidi dolje)                                                                       |
+| `/.well-known/agent.json`    | GET    | Kartica agenta (A2A discovery)                              | (javno, keširano 3600s)                                                                                      |
+| `/api/a2a/tasks`             | POST   | Dolazna delegacija u OmniConductor flotu (Dirigent PRD RF5) | isto kao `GET`, plus `OMNIROUTE_API_KEY` ako je postavljeno dok je `REQUIRE_API_KEY` isključen; `a2aEnabled` |
 
-**Inbound Conductor delegacija (`POST /api/a2a/tasks`):** vanjski A2A agenti delegiraju programerski rad OmniConductor floti putem OmniRoute-a. Body: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — samo vještine Conductor flote (one koje su objavljene na Agent Card-u) su delegabilne; `metadata.conductor.repo.url` je obavezan ( flota radi na git repozitorijima). Ruta se prevodi u `POST /v1/tasks` hub-a koristeći serverski `CONDUCTOR_ORCHESTRATOR_TOKEN` (fallback `CONDUCTOR_HUB_TOKEN`) i vraća `201 { conductor_task_id, state: "submitted" }`; statusi zadataka se vraćaju putem SSE→A2A ogledala (RF1) i vidljivi su putem `GET /api/a2a/tasks?skill=conductor`.
+Ko će proći do `/api/a2a/tasks*` ruta ovisi o postavkama za prijavu i API ključ:
+
+- `requireLogin=true` (podrazumevano): međuvera priznaje samo upravljačke akreditive (sesija kontrolne table, `manage` -scope API ključ, `oma_` pristupni token) i `OMNIROUTE_API_KEY`. Običan ključ za zaključivanje dobija `403`. U `Authorization` zaglavlju srednji softver uzima samo `OMNIROUTE_API_KEY` kao `Bearer <key>`; goli ključ ili tab nakon što `Bearer` dobije `401`.
+- `requireLogin=false`, ili prozor povratne petlje prije uključivanja: sa `REQUIRE_API_KEY=true` bilo koji važeći OmniRoute API ključ ili upravljački akreditivi se prihvaćaju i anonimni pozivatelji dobijaju `401`; sa isključenim `REQUIRE_API_KEY` rute su otvorene.
+- `POST /api/a2a/tasks` dodatno zahtijeva `OMNIROUTE_API_KEY` u `Authorization` zaglavlju kada je ta varijabla postavljena, a `REQUIRE_API_KEY` isključen. Ostala zaglavlja, kao što je `x-api-key`, se tu ne računaju. Sa isključenom prijavom ili prije uključivanja ključ prolazi sa ili bez `Bearer` prefiksa; sa uključenom prijavom, samo `Bearer <key>` prolazi kroz srednji softver.
+
+Gdje je potrebna vjerodajnica, `read` -scope `oma_` token radi samo za `GET`.
+
+**Delegacija ulaznog dirigenta (`POST /api/a2a/tasks`):** eksterni A2A agenti delegiraju posao kodiranja OmniConductor floti preko OmniRoute. Telo: samo `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — Vještine flote dirigenta (one objavljene na kartici agenta) su delegirane; `metadata.conductor.repo.url` je obavezan (flota radi na git reposima). Ruta se prevodi u `POST /v1/tasks` čvorišta koristeći `CONDUCTOR_ORCHESTRATOR_TOKEN` na strani servera (fallback `CONDUCTOR_HUB_TOKEN`) i vraća `201 { conductor_task_id, state: "submitted" }`; stanja zadataka se vraćaju kroz SSE→A2A ogledalo (RF1) i vidljiva su preko `GET /api/a2a/tasks?skill=conductor`.
 
 ---
 

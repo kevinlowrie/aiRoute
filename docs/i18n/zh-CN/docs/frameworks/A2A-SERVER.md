@@ -179,20 +179,28 @@ OmniRoute公开了`src/lib/a2a/taskExecution.ts::A2A_SKILL_HANDLERS`中连接的
 
 ---
 
-## REST API（辅助）
+## REST API (辅助)
 
-JSON-RPC 端点 `/a2a` 是规范的 A2A 入口点。以下 REST 端点为仪表板和外部工具提供辅助访问：
+JSON-RPC 端点`/a2a`是规范的A2A入口点。下面的REST端点为仪表板和外部工具提供辅助访问：
 
-| 端点                         | 方法 | 描述                                                       | 认证                                           |
-| :--------------------------- | :--- | :--------------------------------------------------------- | :--------------------------------------------- |
-| `/api/a2a/status`            | GET  | 服务器状态、已注册技能                                     | （公开）                                       |
-| `/api/a2a/tasks`             | GET  | 使用筛选条件列出任务                                       | 管理                                           |
-| `/api/a2a/tasks/[id]`        | GET  | 按 ID 获取任务                                             | 管理                                           |
-| `/api/a2a/tasks/[id]/cancel` | POST | 取消正在运行的任务                                         | 管理                                           |
-| `/.well-known/agent.json`    | GET  | Agent Card（A2A 发现）                                     | （公开，缓存 3600s）                           |
-| `/api/a2a/tasks`             | POST | 向 OmniConductor 工作群组进行入站委派（Conductor PRD RF5） | Bearer 对照 `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| 端点                         | 方法 | 描述                                       | 授权                                                                                      |
+| :--------------------------- | :--- | :----------------------------------------- | :---------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET  | 服务器状态、注册技能                       | （民众）                                                                                  |
+| `/api/a2a/tasks`             | GET  | 使用过滤器列出任务                         | 管理或API密钥（见下文）                                                                   |
+| `/api/a2a/tasks/[id]`        | GET  | 通过ID获取任务                             | 管理或API密钥（见下文）                                                                   |
+| `/api/a2a/tasks/[id]/cancel` | POST | 取消正在运行的任务                         | 管理或API密钥（见下文）                                                                   |
+| `/.well-known/agent.json`    | GET  | 代理卡（A2A发现）                          | （公共，缓存 3600 秒）                                                                    |
+| `/api/a2a/tasks`             | POST | OmniConductor车队入境代表团（指挥PRD RF5） | 与`GET`相同，如果在`REQUIRE_API_KEY`关闭时设置，则加上`OMNIROUTE_API_KEY` ； `a2aEnabled` |
 
-**入站 Conductor 委派（`POST /api/a2a/tasks`）：**外部 A2A 代理通过 OmniRoute 将编码工作委派给 OmniConductor 工作群组。请求体：`{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }`——仅可委派 Conductor 工作群组技能（即 Agent Card 上公布的技能）；`metadata.conductor.repo.url` 为必填项（该工作群组处理 git 仓库）。该路由使用服务器端的 `CONDUCTOR_ORCHESTRATOR_TOKEN`（回退为 `CONDUCTOR_HUB_TOKEN`）转换为中心节点的 `POST /v1/tasks`，并返回 `201 { conductor_task_id, state: "submitted" }`；任务状态通过 SSE→A2A 镜像（RF1）回传，并可通过 `GET /api/a2a/tasks?skill=conductor` 查看。
+谁可以访问`/api/a2a/tasks*`路由取决于登录和 API 密钥设置：
+
+- `requireLogin=true` （默认）：中间件仅允许管理凭据（仪表板会话、 `manage` -scope API密钥、 `oma_`访问令牌）和`OMNIROUTE_API_KEY`。简单的推理密钥得到`403`。在`Authorization`标头中，中间件仅将`OMNIROUTE_API_KEY`视为`Bearer <key>`； `Bearer`获取`401`后的裸键或制表符。
+- `requireLogin=false`，或加入之前的环回窗口：使用`REQUIRE_API_KEY=true`时，任何有效的OmniRoute API密钥或管理凭证都会被接受，匿名调用者将获得`401`； `REQUIRE_API_KEY`关闭后，路线就打开了。
+- 当设置该变量且`REQUIRE_API_KEY`关闭时，`POST /api/a2a/tasks`还需要`Authorization`标头中的`OMNIROUTE_API_KEY` 。其他标头（例如`x-api-key`）不计入其中。关闭登录或登录之前，密钥会通过（带或不带`Bearer`前缀）；登录后，只有`Bearer <key>`通过中间件。
+
+在需要凭证的情况下， `read` -scope `oma_`令牌仅适用于`GET`。
+
+**入境指挥委派 (`POST /api/a2a/tasks`):**外部A2A代理通过OmniRoute将编码工作委托给OmniConductor队列。本体： `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` —仅指挥舰队技能（特工卡上公布的技能）可委托； `metadata.conductor.repo.url`是必需的（舰队在 git 存储库上工作）。该路由使用服务器端`CONDUCTOR_ORCHESTRATOR_TOKEN` （后备`CONDUCTOR_HUB_TOKEN`）转换为集线器的`POST /v1/tasks`并返回`201 { conductor_task_id, state: "submitted" }`；任务状态通过SSE→A2A镜像 (RF1) 回流，并通过`GET /api/a2a/tasks?skill=conductor`可见。
 
 ---
 

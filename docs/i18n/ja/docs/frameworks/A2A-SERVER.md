@@ -180,20 +180,28 @@ OmniRoute `src/lib/a2a/taskExecution.ts::A2A_SKILL_HANDLERS`に接続された 6
 
 ---
 
-## REST API（補助）
+## REST API (補助)
 
-JSON-RPC エンドポイント `/a2a` は、正式な A2A エントリーポイントです。以下の REST エンドポイントは、ダッシュボードや外部ツール向けの補助的なアクセスを提供します。
+JSON-RPC エンドポイント`/a2a`は、正規のA2Aエントリ ポイントです。以下のRESTエンドポイントは、ダッシュボードと外部ツールへの補助アクセスを提供します。
 
-| エンドポイント               | メソッド | 説明                                                            | 認証                                         |
-| :--------------------------- | :------- | :-------------------------------------------------------------- | :------------------------------------------- |
-| `/api/a2a/status`            | GET      | サーバーのステータス、登録済みスキル                            | （公開）                                     |
-| `/api/a2a/tasks`             | GET      | フィルターを使用してタスクを一覧表示                            | 管理用                                       |
-| `/api/a2a/tasks/[id]`        | GET      | ID でタスクを取得                                               | 管理用                                       |
-| `/api/a2a/tasks/[id]/cancel` | POST     | 実行中のタスクをキャンセル                                      | 管理用                                       |
-| `/.well-known/agent.json`    | GET      | Agent Card（A2A ディスカバリー）                                | （公開、3600s キャッシュ）                   |
-| `/api/a2a/tasks`             | POST     | OmniConductor フリートへのインバウンド委任（Conductor PRD RF5） | Bearer と `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| 終点                         | 方法 | 説明                                                | 認証                                                                                                                  |
+| :--------------------------- | :--- | :-------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET  | サーバーステータス、登録スキル                      | （公共）                                                                                                              |
+| `/api/a2a/tasks`             | GET  | フィルターを使用してタスクをリストする              | 管理キーまたはAPIキー (以下を参照)                                                                                    |
+| `/api/a2a/tasks/[id]`        | GET  | IDでタスクを取得                                    | 管理キーまたはAPIキー (以下を参照)                                                                                    |
+| `/api/a2a/tasks/[id]/cancel` | POST | 実行中のタスクをキャンセルする                      | 管理キーまたはAPIキー (以下を参照)                                                                                    |
+| `/.well-known/agent.json`    | GET  | エージェントカード (A2Aディスカバリー)              | (パブリック、キャッシュされた 3600)                                                                                   |
+| `/api/a2a/tasks`             | POST | OmniConductorフリートへの訪日代表団 (指揮者PRD RF5) | `GET`と同じですが、 `REQUIRE_API_KEY`オフのときに設定されている場合は`OMNIROUTE_API_KEY`が追加されます。 `a2aEnabled` |
 
-**インバウンド Conductor 委任（`POST /api/a2a/tasks`）：** 外部の A2A エージェントは、OmniRoute を介してコーディング作業を OmniConductor フリートに委任します。本文：`{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — 委任できるのは Conductor フリートのスキル（Agent Card で公開されているもの）のみです。フリートは git リポジトリ上で作業するため、`metadata.conductor.repo.url` は必須です。このルートは、サーバー側の `CONDUCTOR_ORCHESTRATOR_TOKEN`（フォールバックは `CONDUCTOR_HUB_TOKEN`）を使用して、ハブの `POST /v1/tasks` に変換し、`201 { conductor_task_id, state: "submitted" }` を返します。タスクの状態は SSE→A2A ミラー（RF1）を介して反映され、`GET /api/a2a/tasks?skill=conductor` で確認できます。
+誰が`/api/a2a/tasks*`ルートにアクセスできるかは、ログインと API キーの設定によって異なります。
+
+- `requireLogin=true` (デフォルト): ミドルウェアは管理資格情報 (ダッシュボード セッション、 `manage`、-scope 、 APIキー、 `oma_`アクセス トークン) および`OMNIROUTE_API_KEY`のみを許可します。単純な推論キーは`403`を取得します。 `Authorization`ヘッダーでは、ミドルウェアは`OMNIROUTE_API_KEY` `Bearer <key>`としてのみ受け取ります。 `Bearer`が`401`を取得した後のベアキーまたはタブ。
+- `requireLogin=false`、またはオンボード前のループバック ウィンドウ: `REQUIRE_API_KEY=true`では、有効なOmniRoute APIキーまたは管理資格情報が受け入れられ、匿名の呼び出し元は`401`を取得します。 `REQUIRE_API_KEY`オフにすると、ルートが開きます。
+- `POST /api/a2a/tasks` 、変数が設定され、 `REQUIRE_API_KEY`がオフの場合、 `Authorization`ヘッダーにさらに`OMNIROUTE_API_KEY`必要です。 `x-api-key`などの他のヘッダーはここではカウントされません。ログインがオフの場合、またはオンボード前に、キーは`Bearer`プレフィックスの有無にかかわらず渡されます。ログインがオンの場合、 `Bearer <key>`のみがミドルウェアを通過します。
+
+資格情報が必要な場合、 `read` -scope `oma_`トークンは`GET`に対してのみ機能します。
+
+**インバウンドコンダクター代表団 (`POST /api/a2a/tasks`):**外部A2Aエージェントは、 OmniRouteを通じてコーディング作業をOmniConductorフリートに委任します。本文: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` —指揮者フリートのスキル (エージェント カードで発表されているもの) のみが委任可能です。 `metadata.conductor.repo.url`が必要です (フリートは git リポジトリで動作します)。ルートは、サーバー側`CONDUCTOR_ORCHESTRATOR_TOKEN` (フォールバック`CONDUCTOR_HUB_TOKEN`) を使用してハブの`POST /v1/tasks`に変換され、 `201 { conductor_task_id, state: "submitted" }`を返します。タスクの状態はSSE→A2Aミラー (RF1) を介して逆流され、 `GET /api/a2a/tasks?skill=conductor`を介して表示されます。
 
 ---
 

@@ -180,20 +180,28 @@ Cada linha inclui a coluna `rawUrl` para que os agentes possam buscar imediatame
 
 ---
 
-## API REST (auxiliar)
+## REST API (auxiliar)
 
-O endpoint JSON-RPC `/a2a` é o ponto de entrada A2A canônico. Os endpoints REST abaixo fornecem acesso auxiliar para painéis e ferramentas externas:
+O endpoint JSON-RPC `/a2a` é o ponto de entrada canônico A2A. Os endpoints REST abaixo fornecem acesso auxiliar para painéis e ferramentas externas:
 
-| Endpoint                     | Método | Descrição                                                           | Autenticação                                           |
-| :--------------------------- | :----- | :------------------------------------------------------------------ | :----------------------------------------------------- |
-| `/api/a2a/status`            | GET    | Status do servidor, skills registradas                              | (público)                                              |
-| `/api/a2a/tasks`             | GET    | Lista tarefas com filtros                                           | gerenciamento                                          |
-| `/api/a2a/tasks/[id]`        | GET    | Obtém uma tarefa por ID                                             | gerenciamento                                          |
-| `/api/a2a/tasks/[id]/cancel` | POST   | Cancela uma tarefa em execução                                      | gerenciamento                                          |
-| `/.well-known/agent.json`    | GET    | Agent Card (descoberta A2A)                                         | (público, armazenado em cache por 3600s)               |
-| `/api/a2a/tasks`             | POST   | Delegação de entrada para a frota OmniConductor (Conductor PRD RF5) | Bearer em relação a `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| Ponto final                  | Método | Descrição                                                          | Autenticação                                                                                                    |
+| :--------------------------- | :----- | :----------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET    | Status do servidor, habilidades registradas                        | (público)                                                                                                       |
+| `/api/a2a/tasks`             | GET    | Listar tarefas com filtros                                         | gerenciamento ou chave API (veja abaixo)                                                                        |
+| `/api/a2a/tasks/[id]`        | GET    | Obter tarefa por ID                                                | gerenciamento ou chave API (veja abaixo)                                                                        |
+| `/api/a2a/tasks/[id]/cancel` | POST   | Cancelar tarefa em execução                                        | gerenciamento ou chave API (veja abaixo)                                                                        |
+| `/.well-known/agent.json`    | GET    | Cartão de agente (descoberta A2A )                                 | (público, 3600 em cache)                                                                                        |
+| `/api/a2a/tasks`             | POST   | Delegação de entrada para a frota OmniConductor (Condutor PRD RF5) | igual a `GET`, mais `OMNIROUTE_API_KEY` se definido enquanto `REQUIRE_API_KEY` estiver desativado; `a2aEnabled` |
 
-**Delegação de entrada do Conductor (`POST /api/a2a/tasks`):** agentes A2A externos delegam trabalhos de programação à frota OmniConductor por meio do OmniRoute. Corpo: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — somente as skills da frota Conductor (aquelas anunciadas no Agent Card) podem receber delegações; `metadata.conductor.repo.url` é obrigatório (a frota trabalha em repositórios git). A rota é convertida em `POST /v1/tasks` do hub usando o `CONDUCTOR_ORCHESTRATOR_TOKEN` do servidor (com fallback para `CONDUCTOR_HUB_TOKEN`) e retorna `201 { conductor_task_id, state: "submitted" }`; os estados das tarefas retornam pelo espelho SSE→A2A (RF1) e ficam visíveis por meio de `GET /api/a2a/tasks?skill=conductor`.
+Quem acessa as rotas `/api/a2a/tasks*` depende das configurações de login e chave de API:
+
+- `requireLogin=true` (padrão): o middleware admite apenas credenciais de gerenciamento (sessão de painel, chave `manage` -scope API, token de acesso `oma_` ) e `OMNIROUTE_API_KEY`. Uma chave de inferência simples obtém `403`. No cabeçalho `Authorization` o middleware só aceita `OMNIROUTE_API_KEY` como `Bearer <key>`; uma chave simples ou uma guia após `Bearer` obter `401`.
+- `requireLogin=false`, ou a janela de loopback antes da integração: com `REQUIRE_API_KEY=true` qualquer chave OmniRoute API válida ou credencial de gerenciamento é aceita e chamadores anônimos recebem `401`; com `REQUIRE_API_KEY` desligado as rotas estão abertas.
+- `POST /api/a2a/tasks` adicionalmente requer `OMNIROUTE_API_KEY` no cabeçalho `Authorization` quando essa variável está definida e `REQUIRE_API_KEY` está desativado. Outros cabeçalhos, como `x-api-key`, não contam aqui. Com o login desativado ou antes da integração, a chave passa com ou sem prefixo `Bearer` ; com o login ativado, apenas `Bearer <key>` passa pelo middleware.
+
+Onde uma credencial é necessária, um token `read` -scope `oma_` funciona apenas para `GET`.
+
+**Delegação do Condutor de Entrada (`POST /api/a2a/tasks`):** agentes A2A externos delegam o trabalho de codificação para a frota OmniConductor por meio OmniRoute. Corpo: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — apenas as habilidades da frota do Condutor (aquelas anunciadas no Cartão de Agente) são delegáveis; `metadata.conductor.repo.url` é necessário (a frota funciona em repositórios git). A rota é traduzida para o `POST /v1/tasks` do hub usando o `CONDUCTOR_ORCHESTRATOR_TOKEN` do lado do servidor (fallback `CONDUCTOR_HUB_TOKEN`) e retorna `201 { conductor_task_id, state: "submitted" }`; os estados da tarefa fluem de volta através do espelho SSE→A2A (RF1) e são visíveis via `GET /api/a2a/tasks?skill=conductor`.
 
 ---
 

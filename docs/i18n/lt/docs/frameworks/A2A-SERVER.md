@@ -180,20 +180,28 @@ Kiekvienoje eilutėje yra `rawUrl` stulpelis, todėl agentai gali iš karto gaut
 
 ---
 
-## REST API (pagalbinė)
+## REST API (pagalbinis)
 
-JSON-RPC galinis taškas `/a2a` yra pagrindinis A2A įvesties taškas. Toliau pateikti REST galiniai taškai suteikia pagalbinę prieigą suvestinėms ir išoriniams įrankiams:
+JSON-RPC galutinis taškas `/a2a` yra kanoninis A2A įėjimo taškas. Toliau pateikti REST galiniai taškai suteikia papildomą prieigą prie prietaisų skydelių ir išorinių įrankių:
 
-| Galinis taškas               | Metodas | Aprašymas                                                               | Autentifikavimas                             |
-| :--------------------------- | :------ | :---------------------------------------------------------------------- | :------------------------------------------- |
-| `/api/a2a/status`            | GET     | Serverio būsena, užregistruoti įgūdžiai                                 | (vieša)                                      |
-| `/api/a2a/tasks`             | GET     | Užduočių sąrašas su filtrais                                            | valdymas                                     |
-| `/api/a2a/tasks/[id]`        | GET     | Gauti užduotį pagal ID                                                  | valdymas                                     |
-| `/api/a2a/tasks/[id]/cancel` | POST    | Atšaukti vykdomą užduotį                                                | valdymas                                     |
-| `/.well-known/agent.json`    | GET     | Agento kortelė (A2A aptikimas)                                          | (vieša, podėlyje laikoma 3600s)              |
-| `/api/a2a/tasks`             | POST    | Gaunamų užduočių delegavimas „OmniConductor“ grupei (Conductor PRD RF5) | Bearer su `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| Galutinis taškas             | Metodas | Aprašymas                                                            | Aut                                                                                                         |
+| :--------------------------- | :------ | :------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET     | Serverio būsena, registruoti įgūdžiai                                | (viešas)                                                                                                    |
+| `/api/a2a/tasks`             | GET     | Išvardykite užduotis naudodami filtrus                               | valdymas arba API klavišas (žr. toliau)                                                                     |
+| `/api/a2a/tasks/[id]`        | GET     | Gaukite užduotį ID                                                   | valdymas arba API klavišas (žr. toliau)                                                                     |
+| `/api/a2a/tasks/[id]/cancel` | POST    | Atšaukti vykdomą užduotį                                             | valdymas arba API klavišas (žr. toliau)                                                                     |
+| `/.well-known/agent.json`    | GET     | Agento kortelė (A2A discovery)                                       | (vieša, talpykloje saugoma 3600)                                                                            |
+| `/api/a2a/tasks`             | POST    | Atvykstančioji delegacija į OmniConductor parką (dirigentas PRD RF5) | tas pats kaip `GET`, plius `OMNIROUTE_API_KEY` jei nustatyta, kai `REQUIRE_API_KEY` išjungtas; `a2aEnabled` |
 
-**Gaunamas „Conductor“ delegavimas (`POST /api/a2a/tasks`):** išoriniai A2A agentai per „OmniRoute“ deleguoja programavimo darbus „OmniConductor“ grupei. Turinys: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — deleguoti galima tik „Conductor“ grupės įgūdžius (paskelbtus Agento kortelėje); `metadata.conductor.repo.url` yra privalomas (grupė dirba su git saugyklomis). Maršrutas transformuojamas į centro `POST /v1/tasks`, naudojant serverio pusės `CONDUCTOR_ORCHESTRATOR_TOKEN` (atsarginis variantas – `CONDUCTOR_HUB_TOKEN`), ir grąžina `201 { conductor_task_id, state: "submitted" }`; užduočių būsenos perduodamos atgal per SSE→A2A atspindį (RF1) ir yra matomos naudojant `GET /api/a2a/tasks?skill=conductor`.
+Kas pateks į `/api/a2a/tasks*` maršrutus, priklauso nuo prisijungimo ir API rakto nustatymų:
+
+- `requireLogin=true` (numatytasis): tarpinė programinė įranga priima tik valdymo kredencialus (prietaisų skydelio sesija, `manage` -scope API raktas, `oma_` prieigos raktas) ir `OMNIROUTE_API_KEY`. Paprastas išvados raktas gauna `403`. `Authorization` antraštėje tarpinė programinė įranga naudoja tik `OMNIROUTE_API_KEY` kaip `Bearer <key>`; plikas klavišas arba skirtukas po `Bearer` gauna `401`.
+- `requireLogin=false` arba atgalinis langas prieš prisijungiant: naudojant `REQUIRE_API_KEY=true` priimamas bet koks galiojantis OmniRoute API raktas arba valdymo kredencialas, o anoniminiai skambintojai gauna `401`; su `REQUIRE_API_KEY` išjungti maršrutai yra atviri.
+- `POST /api/a2a/tasks` papildomai reikalauja `OMNIROUTE_API_KEY` `Authorization` antraštėje, kai šis kintamasis nustatytas, o `REQUIRE_API_KEY` išjungtas. Kitos antraštės, pvz. `x-api-key`, ten neįskaitomos. Išjungus prisijungimą arba prieš prisijungiant, raktas perduodamas su `Bearer` priešdėliu arba be jo; prisijungus, tik `Bearer <key>` praeina tarpinę programinę įrangą.
+
+Kai reikia kredencialo, `read` -scope `oma_` prieigos raktas veikia tik `GET`.
+
+**Atvykstančių dirigentų delegacija (`POST /api/a2a/tasks`):** išoriniai A2A agentai perduoda kodavimo darbus OmniConductor laivynui per OmniRoute. Korpusas: tik `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — Dirigentų parko įgūdžiai (kurie nurodyti agento kortelėje) yra perduodami; Reikalingas `metadata.conductor.repo.url` (parkas veikia su git atpirkimo sandoriais). Maršrutas paverčiamas koncentratoriaus `POST /v1/tasks` naudojant serverio pusės `CONDUCTOR_ORCHESTRATOR_TOKEN` (atsarginis `CONDUCTOR_HUB_TOKEN`) ir grąžina `201 { conductor_task_id, state: "submitted" }`; užduočių būsenos grįžta per SSE→A2A veidrodį (RF1) ir yra matomos per `GET /api/a2a/tasks?skill=conductor`.
 
 ---
 

@@ -182,18 +182,26 @@ API ඇමතුම් යැවීමට පෙර OmniRoute නිරාවර
 
 ## REST API (සහායක)
 
-JSON-RPC අන්ත ලක්ෂ්යය වන `/a2a`, සම්මත A2A ප්රවේශ ලක්ෂ්යයයි. පහත REST අන්ත ලක්ෂ්ය උපකරණ පුවරු සහ බාහිර මෙවලම් සඳහා සහායක ප්රවේශය සපයයි:
+JSON-RPC අන්ත ලක්ෂ්‍යය `/a2a` යනු කැනොනිකල් A2A ඇතුල්වීමේ ස්ථානයයි. පහත REST අන්ත ලක්ෂ්‍ය උපකරණ පුවරු සහ බාහිර මෙවලම් සඳහා සහායක ප්‍රවේශය සපයයි:
 
-| අන්ත ලක්ෂ්යය                 | ක්රමය | විස්තරය                                               | සත්යාපනය                                     |
-| :--------------------------- | :---- | :---------------------------------------------------- | :------------------------------------------- |
-| `/api/a2a/status`            | GET   | සේවාදායක තත්ත්වය, ලියාපදිංචි කළ කුසලතා                | (පොදු)                                       |
-| `/api/a2a/tasks`             | GET   | පෙරහන් සමඟ කාර්ය ලැයිස්තුගත කිරීම                     | කළමනාකරණය                                    |
-| `/api/a2a/tasks/[id]`        | GET   | ID අනුව කාර්යය ලබාගැනීම                               | කළමනාකරණය                                    |
-| `/api/a2a/tasks/[id]/cancel` | POST  | ක්රියාත්මක වන කාර්යය අවලංගු කිරීම                     | කළමනාකරණය                                    |
-| `/.well-known/agent.json`    | GET   | නියෝජිත කාඩ්පත (A2A සොයාගැනීම)                        | (පොදු, තත්පර 3600ක් හැඹිලිගත කර ඇත)          |
-| `/api/a2a/tasks`             | POST  | OmniConductor සමූහය වෙත එන පැවරීම (Conductor PRD RF5) | Bearer හා `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| අන්ත ලක්ෂ්‍යය                | ක්රමය | විස්තරය                                                            | Aut                                                                                                                 |
+| :--------------------------- | :---- | :----------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
+| `/api/a2a/status`            | GET   | සේවාදායක තත්ත්වය, ලියාපදිංචි කුසලතා                                | (පොදු)                                                                                                              |
+| `/api/a2a/tasks`             | GET   | පෙරහන් සමඟ කාර්යයන් ලැයිස්තුගත කරන්න                               | කළමනාකරණය හෝ API යතුර (පහත බලන්න)                                                                                   |
+| `/api/a2a/tasks/[id]`        | GET   | ID මගින් කාර්යය ලබා ගන්න                                           | කළමනාකරණය හෝ API යතුර (පහත බලන්න)                                                                                   |
+| `/api/a2a/tasks/[id]/cancel` | POST  | ධාවන කාර්යය අවලංගු කරන්න                                           | කළමනාකරණය හෝ API යතුර (පහත බලන්න)                                                                                   |
+| `/.well-known/agent.json`    | GET   | නියෝජිත කාඩ්පත (A2A සොයාගැනීම)                                     | (පොදු, හැඹිලිගත තත් 3600)                                                                                           |
+| `/api/a2a/tasks`             | POST  | OmniConductor බලඇණියට පැමිණෙන නියෝජිත කණ්ඩායම (කොන්දොස්තර PRD RF5) | `GET` ට සමාන වේ, `REQUIRE_API_KEY` ක්‍රියා විරහිතව තිබියදී සකසන්නේ නම් `OMNIROUTE_API_KEY` එකතු කරන්න; `a2aEnabled` |
 
-**එන Conductor පැවරීම (`POST /api/a2a/tasks`):** බාහිර A2A නියෝජිතයන් OmniRoute හරහා OmniConductor සමූහයට කේතකරණ වැඩ පවරයි. අන්තර්ගතය: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — පැවරිය හැක්කේ Conductor සමූහ කුසලතා (Agent Card හි නිවේදනය කර ඇති ඒවා) පමණි; `metadata.conductor.repo.url` අවශ්ය වේ (සමූහය git ගබඩා මත ක්රියා කරයි). මෙම මාර්ගය සේවාදායක-පාර්ශ්වීය `CONDUCTOR_ORCHESTRATOR_TOKEN` (විකල්පය `CONDUCTOR_HUB_TOKEN`) භාවිතයෙන් hub හි `POST /v1/tasks` වෙත පරිවර්තනය වන අතර `201 { conductor_task_id, state: "submitted" }` ආපසු ලබා දෙයි; කාර්ය තත්ත්වයන් SSE→A2A දර්පණය (RF1) හරහා නැවත ගලා එන අතර `GET /api/a2a/tasks?skill=conductor` මඟින් දැකගත හැක.
+`/api/a2a/tasks*` මාර්ග වෙත පිවිසෙන්නේ කවුද යන්න පිවිසුම් සහ API-යතුරු සැකසුම් මත රඳා පවතී:
+
+- `requireLogin=true` (පෙරනිමිය): මිඩ්ල්වෙයාර් කළමනාකරණ අක්තපත්‍ර පමණක් පිළිගනී (උපකරණ පුවරු සැසිය, `manage` -scope API යතුර, `oma_` ප්‍රවේශ ටෝකනය) සහ `OMNIROUTE_API_KEY`. සරල අනුමාන යතුරක් `403` ලබා ගනී. `Authorization` ශීර්ෂයේ මිඩ්ල්වෙයාර් `OMNIROUTE_API_KEY` `Bearer <key>` ලෙස පමණක් ගනී; හිස් යතුරක් හෝ `Bearer` ට පසු ටැබ් එකක් `401` ලබා ගනී.
+- `requireLogin=false`, හෝ ඇතුල් වීමට පෙර loopback කවුළුව: `REQUIRE_API_KEY=true` සමඟ ඕනෑම වලංගු OmniRoute API යතුරක් හෝ කළමනාකරණ අක්තපත්‍රයක් පිළිගනු ලබන අතර නිර්නාමික ඇමතුම්කරුවන්ට `401` ලැබේ ; `REQUIRE_API_KEY` සමඟ මාර්ග විවෘතව ඇත.
+- එම විචල්‍යය සකසා `REQUIRE_API_KEY` අක්‍රිය වූ විට `POST /api/a2a/tasks` හට `Authorization` ශීර්ෂයේ `OMNIROUTE_API_KEY` අවශ්‍ය වේ. `x-api-key` වැනි අනෙකුත් ශීර්ෂයන් එහි ගණන් නොගනී. ප්‍රවිෂ්ට වීමත් සමඟ හෝ ඇතුල් වීමට පෙර යතුර `Bearer` උපසර්ගයක් සහිතව හෝ රහිතව ගමන් කරයි; පුරනය වීමත් සමග, `Bearer <key>` පමණක් මිඩ්ල්වෙයාර් ඉක්මවා යයි.
+
+අක්තපත්‍රයක් අවශ්‍ය නම්, `read` -scope `oma_` ටෝකනයක් ක්‍රියා කරන්නේ `GET` සඳහා පමණි.
+
+**පැමිණෙන සන්නායක නියෝජිත කණ්ඩායම (`POST /api/a2a/tasks`):** බාහිර A2A නියෝජිතයන් OmniRoute හරහා OmniConductor බලඇණියට කේතීකරණ කටයුතු පවරයි. ශරීරය: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — පමණක් කොන්දොස්තර යාත්‍රා කුසලතා (නියෝජිත කාඩ්පතේ ප්‍රකාශ කර ඇති ඒවා) පැවරිය හැකිය; `metadata.conductor.repo.url` අවශ්‍ය වේ (ඇණිය git repo මත ක්‍රියා කරයි). මාර්ගය සේවාදායක පැත්තේ `CONDUCTOR_ORCHESTRATOR_TOKEN` (Fallback `CONDUCTOR_HUB_TOKEN`) භාවිතයෙන් hub හි `POST /v1/tasks` වෙත පරිවර්තනය කර `201 { conductor_task_id, state: "submitted" }` ආපසු ලබා දෙයි ; කාර්ය තත්වයන් SSE→A2A දර්පණය (RF1) හරහා ආපසු ගලා යන අතර `GET /api/a2a/tasks?skill=conductor` හරහා දෘශ්‍යමාන වේ.
 
 ---
 

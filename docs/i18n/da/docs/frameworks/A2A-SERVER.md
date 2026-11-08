@@ -180,20 +180,28 @@ Hver række inkluderer `rawUrl` kolonnen, så agenter straks kan hente den fulde
 
 ---
 
-## REST API (supplerende)
+## REST API (hjælpe)
 
-JSON-RPC-slutpunktet `/a2a` er det kanoniske A2A-indgangspunkt. REST-slutpunkterne nedenfor giver supplerende adgang til dashboards og eksterne værktøjer:
+JSON-RPC-endepunktet `/a2a` er det kanoniske A2A indgangspunkt. REST -endepunkterne nedenfor giver ekstra adgang til dashboards og eksternt værktøj:
 
-| Slutpunkt                    | Metode | Beskrivelse                                                       | Godkendelse                                   |
-| :--------------------------- | :----- | :---------------------------------------------------------------- | :-------------------------------------------- |
-| `/api/a2a/status`            | GET    | Serverstatus, registrerede færdigheder                            | (offentlig)                                   |
-| `/api/a2a/tasks`             | GET    | Vis opgaver med filtre                                            | administration                                |
-| `/api/a2a/tasks/[id]`        | GET    | Hent opgave efter ID                                              | administration                                |
-| `/api/a2a/tasks/[id]/cancel` | POST   | Annuller igangværende opgave                                      | administration                                |
-| `/.well-known/agent.json`    | GET    | Agentkort (A2A-registrering)                                      | (offentlig, cachelagret i 3600s)              |
-| `/api/a2a/tasks`             | POST   | Indgående delegering til OmniConductor-flåden (Conductor PRD RF5) | Bearer mod `OMNIROUTE_API_KEY` + `a2aEnabled` |
+| Slutpunkt                    | Metode | Beskrivelse                                                       | Auth                                                                                                      |
+| :--------------------------- | :----- | :---------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------- |
+| `/api/a2a/status`            | GET    | Serverstatus, registrerede færdigheder                            | (offentlig)                                                                                               |
+| `/api/a2a/tasks`             | GET    | Liste opgaver med filtre                                          | management eller API -nøgle (se nedenfor)                                                                 |
+| `/api/a2a/tasks/[id]`        | GET    | Få opgave af ID                                                   | management eller API -nøgle (se nedenfor)                                                                 |
+| `/api/a2a/tasks/[id]/cancel` | POST   | Annuller kørende opgave                                           | management eller API -nøgle (se nedenfor)                                                                 |
+| `/.well-known/agent.json`    | GET    | Agentkort (A2A discovery)                                         | (offentlig, cachelagret 3600s)                                                                            |
+| `/api/a2a/tasks`             | POST   | Indgående delegation til OmniConductor flåden (Conductor PRD RF5) | samme som `GET`, plus `OMNIROUTE_API_KEY` hvis indstillet mens `REQUIRE_API_KEY` er slukket; `a2aEnabled` |
 
-**Indgående Conductor-delegering (`POST /api/a2a/tasks`):** Eksterne A2A-agenter delegerer programmeringsarbejde til OmniConductor-flåden gennem OmniRoute. Brødtekst: `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — kun Conductor-flådens færdigheder (dem, der annonceres på agentkortet) kan delegeres; `metadata.conductor.repo.url` er påkrævet (flåden arbejder på git-repositorier). Ruten oversættes til hubbens `POST /v1/tasks` ved hjælp af `CONDUCTOR_ORCHESTRATOR_TOKEN` på serversiden (med `CONDUCTOR_HUB_TOKEN` som reserve) og returnerer `201 { conductor_task_id, state: "submitted" }`; opgavetilstande sendes tilbage gennem SSE→A2A-spejlingen (RF1) og kan ses via `GET /api/a2a/tasks?skill=conductor`.
+Hvem der kommer igennem til `/api/a2a/tasks*` ruterne afhænger af login- og API-nøgleindstillingerne:
+
+- `requireLogin=true` (standard): middlewaren tillader kun ledelseslegitimationsoplysninger (dashboardsession, `manage` -scope API nøgle, `oma_` -adgangstoken) og `OMNIROUTE_API_KEY`. En almindelig slutningsnøgle får `403`. I `Authorization` headeren tager middlewaren kun `OMNIROUTE_API_KEY` som `Bearer <key>`; en bare nøgle eller en tabulator efter `Bearer` får `401`.
+- `requireLogin=false`, eller loopback-vinduet før onboarding: med `REQUIRE_API_KEY=true` accepteres enhver gyldig OmniRoute API nøgle eller ledelseslegitimationsoplysninger, og anonyme opkaldere får `401`; med `REQUIRE_API_KEY` off er ruterne åbne.
+- `POST /api/a2a/tasks` kræver desuden `OMNIROUTE_API_KEY` i `Authorization` headeren, når denne variabel er indstillet, og `REQUIRE_API_KEY` er slået fra. Andre overskrifter, såsom `x-api-key`, tæller ikke med der. Med login fra eller før onboarding passerer nøglen med eller uden et `Bearer` -præfiks; med login på er det kun `Bearer <key>`, der kommer forbi middlewaren.
+
+Hvor der kræves legitimationsoplysninger, virker et `read` -scope `oma_` token kun for `GET`.
+
+**Indgående dirigent delegation (`POST /api/a2a/tasks`):** eksterne A2A agenter uddelegerer kodningsarbejde til OmniConductor flåden gennem OmniRoute. Brødtekst: kun `{ skill: "conductor" | "conductor-cli-<profile>", messages: [{role, content}], metadata: { conductor: { repo: { url, base_ref? }, mode?, cli?, model? } } }` — Konduktørflådefærdigheder (dem, der er annonceret på agentkortet) kan delegeres; `metadata.conductor.repo.url` er påkrævet (flåden arbejder på git repos). Ruten oversættes til hub'ens `POST /v1/tasks` ved hjælp af server-side `CONDUCTOR_ORCHESTRATOR_TOKEN` (fallback `CONDUCTOR_HUB_TOKEN`) og returnerer `201 { conductor_task_id, state: "submitted" }`; opgavetilstande flyder tilbage gennem SSE→A2A spejlet (RF1) og er synlige via `GET /api/a2a/tasks?skill=conductor`.
 
 ---
 
