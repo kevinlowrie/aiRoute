@@ -454,3 +454,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Branch & hook policy
+
+This repository follows the [harmonized branch, hook & release policy](docs/dev-branch-policy.md).
+Local hooks run `scripts/hook_policy.py` — **FAST** profile on WIP/PR branches
+(fast commit/push loop), **FULL** profile on protected branches (`main`,
+`testing`, `freeze`, `release-candidate`, `release`, `prod`).
+
+```sh
+pre-commit install            # or: make hooks-install
+python3 scripts/hook_policy.py status
+```
