@@ -6,6 +6,7 @@ name: policy-ci
 # new zizmor findings to the check:workflows ratchet.
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
