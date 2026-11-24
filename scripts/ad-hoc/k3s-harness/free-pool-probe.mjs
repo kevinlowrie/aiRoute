@@ -58,7 +58,8 @@ const count = (items, keyOf) => {
   return Object.entries(out).sort((a, b) => b[1] - a[1]);
 };
 
-const isOk = (r) => r.status >= 200 && r.status < 300;
+// A 2xx with an error frame inside the stream is a failure, not a success.
+const isOk = (r) => r.status >= 200 && r.status < 300 && !r.errorCode;
 
 runMain(async () => {
   if (!values.model) throw new Error("pass --model <combo-or-model> (or set HARNESS_PROBE_MODEL)");

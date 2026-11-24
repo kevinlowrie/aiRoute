@@ -85,9 +85,14 @@ function readBody(req) {
   });
 }
 
+// Accepts only a JSON object. `null`, numbers and arrays would crash the callers.
 function parseJsonBody(text) {
   if (!text) return {};
-  return JSON.parse(text);
+  const parsed = JSON.parse(text);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("body must be a JSON object");
+  }
+  return parsed;
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -111,7 +116,7 @@ async function handleChat(req, res, name, state) {
   try {
     body = parseJsonBody(await readBody(req));
   } catch {
-    return openAiError(res, 400, "mock: request body is not JSON", "invalid_json", name);
+    return openAiError(res, 400, "mock: request body must be a JSON object", "invalid_json", name);
   }
 
   await sleep(state.latencyMs);
@@ -194,7 +199,7 @@ async function handleControl(req, res, name) {
   try {
     patch = parseJsonBody(await readBody(req));
   } catch {
-    return sendJson(res, 400, { error: { message: "control body must be JSON" } });
+    return sendJson(res, 400, { error: { message: "control body must be a JSON object" } });
   }
   const state = stateFor(name);
   if (patch.reset === true) {
@@ -247,7 +252,7 @@ const server = http.createServer(async (req, res) => {
 
     const control = pathname.match(/^\/__control\/([^/]+)$/);
     if (req.method === "POST" && control) {
-      return handleControl(req, res, control[1]);
+      return await handleControl(req, res, control[1]);
     }
 
     const scoped = pathname.match(/^\/u\/([^/]+)(\/v1\/.*)$/);
@@ -268,7 +273,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && v1Path === "/v1/chat/completions") {
-      return handleChat(req, res, name, state);
+      return await handleChat(req, res, name, state);
     }
 
     return sendJson(res, 404, {

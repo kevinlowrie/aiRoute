@@ -126,7 +126,13 @@ runMain(async () => {
       `${servedByGood} served by ${goodMock}`
     );
 
+    // The failing upstream must be hit at least once, or the failover path never ran.
     const badHits = (await mockState(badMock))?.failed ?? null;
+    checks.check(
+      "failing provider was tried (failover path exercised)",
+      badHits !== null && badHits >= 1,
+      `failing upstream saw ${badHits ?? "unknown"} of ${REQUESTS} requests`
+    );
     checks.check(
       `failing provider stopped receiving traffic (<= ${MAX_BAD_HITS} hits)`,
       badHits !== null && badHits <= MAX_BAD_HITS,

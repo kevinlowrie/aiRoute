@@ -2,7 +2,7 @@
 //   1. smoke              (adds --model from HARNESS_SMOKE_MODEL, if set)
 //   2. fallback-drill     (needs the mock upstream)
 //   3. tenant-isolation   (needs the mock upstream)
-//   4. free-pool-probe    (only if HARNESS_PROBE_MODEL is set; sends 10 requests)
+//   4. free-pool-probe    (only if HARNESS_PROBE_MODEL is set; sends 10 requests, needs 80% success)
 // Each drill cleans up after itself. Run cleanup.mjs --apply afterwards to sweep leftovers.
 //
 // Run:  node scripts/ad-hoc/k3s-harness/run-all.mjs
@@ -22,7 +22,11 @@ const steps = [
   { name: "tenant-isolation", args: [] },
 ];
 if (process.env.HARNESS_PROBE_MODEL) {
-  steps.push({ name: "free-pool-probe", args: ["--requests", "10", "--concurrency", "3"] });
+  // --min-success makes the probe exit non-zero when too few requests succeed.
+  steps.push({
+    name: "free-pool-probe",
+    args: ["--requests", "10", "--concurrency", "3", "--min-success", "0.8"],
+  });
 }
 
 const failed = [];

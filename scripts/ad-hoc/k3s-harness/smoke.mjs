@@ -38,40 +38,43 @@ runMain(async () => {
     );
   }
 
+  // Create the key, then make sure it is deleted however the checks below go.
   const key = await createKey(`smoke-${stamp()}`);
-  checks.check("created a harness inference key", Boolean(key.key), key.name);
+  try {
+    checks.check("created a harness inference key", Boolean(key.key), key.name);
 
-  const models = await fetch(`${config.omniUrl}/v1/models`, {
-    headers: { authorization: `Bearer ${key.key}` },
-    signal: AbortSignal.timeout(config.timeoutMs),
-  });
-  const modelBody = await models.json().catch(() => null);
-  const count = Array.isArray(modelBody?.data) ? modelBody.data.length : 0;
-  checks.check(
-    "/v1/models answers with the key",
-    models.ok,
-    `HTTP ${models.status}, ${count} models`
-  );
-
-  if (values.model) {
-    const result = await chat({ key: key.key, model: values.model, maxTokens: 16 });
-    const ok = result.status >= 200 && result.status < 300;
+    const models = await fetch(`${config.omniUrl}/v1/models`, {
+      headers: { authorization: `Bearer ${key.key}` },
+      signal: AbortSignal.timeout(config.timeoutMs),
+    });
+    const modelBody = await models.json().catch(() => null);
+    const count = Array.isArray(modelBody?.data) ? modelBody.data.length : 0;
     checks.check(
-      `chat via "${values.model}" returns 2xx`,
-      ok,
-      ok
-        ? `${Math.round(result.latencyMs)} ms, provider ${result.decision?.provider ?? "unknown"}`
-        : `HTTP ${result.status} ${result.errorCode}: ${result.errorMessage}`
+      "/v1/models answers with the key",
+      models.ok,
+      `HTTP ${models.status}, ${count} models`
     );
-    if (ok && result.content) console.log(`reply: ${result.content.slice(0, 160)}`);
-  } else {
-    console.log("(skipped chat: pass --model <combo-name> to send one request through it)");
-  }
 
-  if (values.keep) {
-    console.log(`kept key ${key.name} (id ${key.id}); remove later with cleanup.mjs`);
-  } else {
-    await deleteKey(key.id);
+    if (values.model) {
+      const result = await chat({ key: key.key, model: values.model, maxTokens: 16 });
+      const ok = result.status >= 200 && result.status < 300;
+      checks.check(
+        `chat via "${values.model}" returns 2xx`,
+        ok,
+        ok
+          ? `${Math.round(result.latencyMs)} ms, provider ${result.decision?.provider ?? "unknown"}`
+          : `HTTP ${result.status} ${result.errorCode}: ${result.errorMessage}`
+      );
+      if (ok && result.content) console.log(`reply: ${result.content.slice(0, 160)}`);
+    } else {
+      console.log("(skipped chat: pass --model <combo-name> to send one request through it)");
+    }
+  } finally {
+    if (values.keep) {
+      console.log(`kept key ${key.name} (id ${key.id}); remove later with cleanup.mjs`);
+    } else {
+      await deleteKey(key.id);
+    }
   }
   checks.finish();
 });

@@ -235,31 +235,61 @@ export async function chat({
 
   let ttfbMs = null;
   let text = "";
+  let readError = null;
   if (res.body) {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (ttfbMs === null) ttfbMs = performance.now() - started;
-      text += decoder.decode(value, { stream: true });
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (ttfbMs === null) ttfbMs = performance.now() - started;
+        text += decoder.decode(value, { stream: true });
+      }
+    } catch (error) {
+      // Headers arrived, then the body failed (timeout or reset). Record a failed request.
+      readError = redact(error.message).slice(0, 240);
     }
   }
   const latencyMs = performance.now() - started;
+  const decision = parseDecision(res.headers.get("x-omniroute-decision"));
+  if (readError !== null) {
+    return {
+      status: 0,
+      latencyMs,
+      ttfbMs,
+      decision,
+      content: null,
+      mockTag: null,
+      errorCode: "body_read_error",
+      errorMessage: readError,
+      diagnostics: null,
+    };
+  }
 
+  // Pick the parser from the response Content-Type, not the request flag. An error
+  // reply to a streamed request is plain JSON even though the client asked for SSE.
+  const isEventStream = (res.headers.get("content-type") ?? "").includes("text/event-stream");
   let body = null;
   let content = null;
-  if (stream) {
-    const pieces = text
-      .split("\n")
-      .filter((line) => line.startsWith("data: ") && !line.includes("[DONE]"))
-      .map((line) => {
-        try {
-          return JSON.parse(line.slice(6)).choices?.[0]?.delta?.content ?? "";
-        } catch {
-          return "";
-        }
-      });
+  let streamError = null;
+  if (isEventStream) {
+    const pieces = [];
+    for (const line of text.split("\n")) {
+      if (!line.startsWith("data: ") || line.includes("[DONE]")) continue;
+      let event = null;
+      try {
+        event = JSON.parse(line.slice(6));
+      } catch {
+        continue;
+      }
+      if (event?.error) {
+        // Some providers report a failure inside a 200 stream as an error frame.
+        streamError ??= event.error;
+      } else {
+        pieces.push(event?.choices?.[0]?.delta?.content ?? "");
+      }
+    }
     content = pieces.join("");
   } else {
     try {
@@ -271,15 +301,24 @@ export async function chat({
   }
 
   const ok = res.status >= 200 && res.status < 300;
+  let errorCode = null;
+  let errorMessage = null;
+  if (!ok) {
+    errorCode = body?.error?.code ?? (body ? "unknown" : "non_json_error");
+    errorMessage = redact(body?.error?.message ?? text).slice(0, 240);
+  } else if (streamError) {
+    errorCode = streamError.code ?? "stream_error";
+    errorMessage = redact(streamError.message ?? JSON.stringify(streamError)).slice(0, 240);
+  }
   return {
     status: res.status,
     latencyMs,
     ttfbMs,
-    decision: parseDecision(res.headers.get("x-omniroute-decision")),
+    decision,
     content,
     mockTag: mockTagFrom(content),
-    errorCode: ok ? null : (body?.error?.code ?? (body ? "unknown" : "non_json_error")),
-    errorMessage: ok ? null : redact(body?.error?.message ?? text).slice(0, 240),
+    errorCode,
+    errorMessage,
     diagnostics: body?.diagnostics ?? null,
   };
 }

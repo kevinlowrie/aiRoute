@@ -50,7 +50,14 @@ runMain(async () => {
 
   const poolMock = tagged(POOL.base);
   const edgeMock = tagged(EDGE.base);
-  const created = { nodes: [], connections: [], combo: null, key: null };
+  const created = {
+    nodes: [],
+    connections: [],
+    combo: null,
+    otherCombo: null,
+    key: null,
+    controlKey: null,
+  };
 
   try {
     // The pool starts healthy. The edge always works.
@@ -97,6 +104,15 @@ runMain(async () => {
       allowedCombos: [created.combo.name],
     });
 
+    // A second real combo on the same pool and edge. The device key must be refused on
+    // it. An unrestricted control key shows that it is routable, so the 403 means something.
+    created.otherCombo = await createCombo({
+      name: "gate-other",
+      strategy: "priority",
+      models: [`${poolNode.prefix}/${MOCK_MODEL}`, `${edgeNode.prefix}/${MOCK_MODEL}`],
+    });
+    created.controlKey = await createKey("gate-control-key");
+
     // Step 1: the pool is healthy, so the device is served from the pool.
     const healthy = [];
     for (let i = 0; i < 3; i += 1) {
@@ -120,6 +136,18 @@ runMain(async () => {
       healthy.map((r) => r.mockTag ?? "-").join(",")
     );
 
+    const control = await chat({
+      key: created.controlKey.key,
+      model: created.otherCombo.name,
+      prompt: "control",
+      maxTokens: 8,
+    });
+    checks.check(
+      "control key reaches the other combo (routable)",
+      control.status >= 200 && control.status < 300 && control.mockTag === poolMock,
+      `HTTP ${control.status}, served by ${control.mockTag ?? "-"}`
+    );
+
     // Step 2: exhaust the pool. Every pool call now fails, and the edge takes over.
     await mockControl(poolMock, { mode: "fail", status: 503 });
     const exhausted = [];
@@ -138,17 +166,27 @@ runMain(async () => {
       exhausted.every((r) => r.status >= 200 && r.status < 300),
       exhausted.map((r) => r.status).join(",")
     );
+    // Mock mode: the edge's reply carries its name. Real-edge mode: a real reply has no
+    // mock tag, so check the provider in the routing decision. That field holds the node's
+    // alias (usually its prefix) or, with no alias, its id, so accept either.
+    const edgeNames = [edgeNode.prefix, edgeNode.id];
+    const servedByEdge = (r) =>
+      EDGE_URL ? edgeNames.includes(r.decision?.provider) : r.mockTag === edgeMock;
     checks.check(
       "pool exhausted: the edge serves the replies",
-      exhausted.every((r) => r.mockTag === edgeMock),
-      exhausted.map((r) => r.mockTag ?? "-").join(",")
+      exhausted.every(servedByEdge),
+      exhausted.map((r) => r.decision?.provider ?? r.mockTag ?? "-").join(",")
     );
 
-    // Step 3: the key cannot reach another combo.
-    const other = await chat({ key: created.key.key, model: "gate-not-a-combo", maxTokens: 8 });
+    // Step 3: the device key is refused on a combo that exists, not on a typo.
+    const other = await chat({
+      key: created.key.key,
+      model: created.otherCombo.name,
+      maxTokens: 8,
+    });
     checks.check(
-      "device key refused on any other combo",
-      other.status === 403 || other.status === 404 || other.status === 400,
+      "device key refused on another valid combo (403)",
+      other.status === 403,
       `HTTP ${other.status}`
     );
 
@@ -171,9 +209,11 @@ runMain(async () => {
       console.log("kept gate resources (remove later with cleanup.mjs)");
     } else {
       if (created.combo) await deleteCombo(created.combo.id);
+      if (created.otherCombo) await deleteCombo(created.otherCombo.id);
       for (const connection of created.connections) await deleteConnection(connection.id);
       for (const node of created.nodes) await deleteNode(node.id);
       if (created.key) await deleteKey(created.key.id);
+      if (created.controlKey) await deleteKey(created.controlKey.id);
       await mockControl(poolMock, { mode: "ok" }).catch(() => {});
     }
   }
