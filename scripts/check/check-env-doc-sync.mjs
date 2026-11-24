@@ -267,6 +267,26 @@ const IGNORE_FROM_CODE = new Set([
   // Next.js-internal switch, not OmniRoute config: scripts/dev/standalone-server-ws.mjs sets it
   // so Next skips its own SIGINT/SIGTERM handlers and the wrapper owns shutdown.
   "NEXT_MANUAL_SIG_HANDLE",
+  // k3s harness (scripts/ad-hoc/k3s-harness): drill, mock-upstream and device-gate knobs read
+  // only by those ad-hoc scripts and their k8s deploy helper. Lab/test settings, never OmniRoute
+  // runtime config, so they stay out of the operator-facing .env.example and ENVIRONMENT.md.
+  "EDGE_API_KEY",
+  "EDGE_URL",
+  "HARNESS_MOCK_CONTROL_URL",
+  "HARNESS_MOCK_MODEL",
+  "HARNESS_MOCK_UPSTREAM_URL",
+  "HARNESS_PROBE_KEY",
+  "HARNESS_PROBE_MODEL",
+  "HARNESS_SMOKE_MODEL",
+  "HARNESS_TAG",
+  "HARNESS_TIMEOUT_MS",
+  "MOCK_API_KEY",
+  "MOCK_HOST",
+  "MOCK_LATENCY_MS",
+  "MOCK_MODEL_ID",
+  "MOCK_PORT",
+  "OMNIROUTE_ADMIN_PASSWORD",
+  "OMNIROUTE_MANAGE_KEY",
 ]);
 
 // Vars documented in ENVIRONMENT.md but intentionally absent from .env.example.
