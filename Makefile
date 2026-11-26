@@ -67,3 +67,14 @@ env-sync: ## Sync .env from .env.example
 
 clean: ## Remove build artifacts
 	rm -rf .build dist coverage .eslintcache
+
+# ── Branch-aware hook policy (scripts/hook_policy.py) ──────────────────────
+.PHONY: hooks-install hooks-status hooks-fast hooks-full
+hooks-install: ## Install pre-commit git hooks
+	pre-commit install
+hooks-status: ## Show current branch hook profile
+	python3 scripts/hook_policy.py status
+hooks-fast: ## Run FAST profile checks (WIP/PR branch simulation)
+	python3 scripts/hook_policy.py pre-push
+hooks-full: ## Run FULL gate (protected branch simulation)
+	HOOK_PROFILE=full python3 scripts/hook_policy.py pre-push

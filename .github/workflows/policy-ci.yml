@@ -1,0 +1,43 @@
+name: policy-ci
+
+# Lightweight PR policy gate: install the locked dependency tree and run the
+# curated core TypeScript subset (typecheck:core). No DB, browser or live
+# services are required. Actions are SHA-pinned (v4) so this workflow adds no
+# new zizmor findings to the check:workflows ratchet.
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - release/v3.8.54
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy-ci:
+    name: policy-ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Pin npm to the lockfile toolchain
+        run: |
+          npm_version="$(node -p "require('./config/ci/toolchain.json').npm")"
+          npm install --global "npm@${npm_version}" --no-audit --no-fund
+      - name: Install dependencies
+        env:
+          ONNXRUNTIME_NODE_INSTALL: skip
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck core subset
+        run: npm run typecheck:core
